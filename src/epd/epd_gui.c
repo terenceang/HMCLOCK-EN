@@ -254,6 +254,33 @@ void draw_text(int x, int y, char *str, int color)
 }
 
 
+// 计算字符串在当前字体下的总像素宽度（不实际绘制）
+int text_width(char *str)
+{
+	int w = 0;
+	int ch;
+
+	while(1){
+		ch = utf8_to_ucs(&str);
+		if(ch==0)
+			break;
+		const u8 *font_data = find_font(current_font, ch);
+		if(font_data)
+			w += font_data[0]; // ft_adv
+	}
+
+	return w;
+}
+
+
+// 以cx为水平中心，居中绘制字符串
+void draw_text_centered(int cx, int y, char *str, int color)
+{
+	int w = text_width(str);
+	draw_text(cx - w/2, y, str, color);
+}
+
+
 /******************************************************************************/
 #if 0
 char *wday_str[] = {

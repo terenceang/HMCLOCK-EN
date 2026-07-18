@@ -423,14 +423,14 @@ typedef struct {
 	u16 y[8];
 }LAYOUT;
 
-// 坐标0: 日期
-// 坐标1: 蓝牙图标
+// 坐标0: 日期（顶部，x仅用y，水平方向居中绘制）
+// 坐标1: 蓝牙图标（旁边紧跟设备ID，仅蓝牙广播时显示）
 // 坐标2: 电池图标
-// 坐标3: 时间
+// 坐标3: 时间（中部，x仅用y，水平方向居中绘制）
 // 坐标4: 未使用（原农历日期，已移除）
 // 坐标5: 未使用（原节气，已移除）
-// 坐标6: 设备ID（仅蓝牙广播时显示）
-// 坐标7: 上下午
+// 坐标6: 星期（底部，x仅用y，水平方向居中绘制）
+// 坐标7: 上下午（紧跟时间右侧动态定位，仅使用此y坐标）
 
 LAYOUT layouts[3] = {
 	{212, 104, 0, 1,
@@ -578,6 +578,8 @@ void clock_draw(int flags)
 	memset(fb_bw, 0xff, scr_h*line_bytes);
 	memset(fb_rr, 0x00, scr_h*line_bytes);
 
+	int cx = lt->xres/2;
+
 	// 显示电池电量
 	draw_batt(lt->x[2], lt->y[2]);
 	if(flags&DRAW_BT){
@@ -585,12 +587,16 @@ void clock_draw(int flags)
 		draw_bt(lt->x[1], lt->y[1]);
 	}
 
-	// 使用大字显示时间
+	// 顶部居中显示日期（DD-MM-YYYY）
+	sprintf(tbuf, "%02d-%02d-%04d", date+1, month+1, year);
+	select_font(lt->font_char);
+	draw_text_centered(cx, lt->y[0], tbuf, BLACK);
+
+	// 中间居中显示时间（大字）
+	select_font(lt->font_dseg);
 	if(h24_format){
 		// 24小时制
-		select_font(lt->font_dseg);
 		sprintf(tbuf, "%02d:%02d", hour, minute);
-		draw_text(lt->x[3], lt->y[3], tbuf, BLACK);
 	}else{
 		// 12小时制
 		int h = hour;
@@ -602,28 +608,29 @@ void clock_draw(int flags)
 		}else if(h==0){
 			h = 12; // 0点显示为12点
 		}
-		select_font(lt->font_dseg);
 		sprintf(tbuf, "%2d:%02d", h, minute);
-		draw_text(lt->x[3], lt->y[3], tbuf, BLACK);
+	}
+	{
+		int tw = text_width(tbuf);
+		int tx = cx - tw/2;
+		draw_text(tx, lt->y[3], tbuf, BLACK);
 
-		// 显示上午/下午
-		select_font(lt->font_char);
-		if(ampm){
-			strcpy(tbuf, "PM");
-		}else{
-			strcpy(tbuf, "AM");
+		if(!h24_format){
+			// 上午/下午紧跟在时间右侧
+			int h = hour;
+			int ampm = (h>=12);
+			select_font(lt->font_char);
+			draw_text(tx+tw+4, lt->y[7], ampm? "PM":"AM", BLACK);
 		}
-		draw_text(lt->x[7], lt->y[7], tbuf, BLACK);
 	}
 
-	// 显示日期（ISO格式 + 星期全称）
-	sprintf(tbuf, "%04d-%02d-%02d  %s", year, month+1, date+1, wday_str[wday]);
+	// 底部居中显示星期（蓝牙广播时附带设备ID后缀）
 	select_font(lt->font_char);
-	draw_text(lt->x[0], lt->y[0], tbuf, BLACK);
-
-	// 蓝牙广播时在原节日位置显示设备ID后缀
 	if(flags&DRAW_BT){
-		draw_text(lt->x[6], lt->y[6], bt_id, BLACK);
+		sprintf(tbuf, "%s  %s", wday_str[wday], bt_id);
+		draw_text_centered(cx, lt->y[6], tbuf, BLACK);
+	}else{
+		draw_text_centered(cx, lt->y[6], wday_str[wday], BLACK);
 	}
 
 	// 墨水屏更新显示
