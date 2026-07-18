@@ -67,8 +67,6 @@ int adcval;
 
 static uint8_t h24_format = 1; // 24小时制标志
 
-static void get_holiday(void);
-
 extern int adv_state;
 /*
  * FUNCTION DEFINITIONS
@@ -121,72 +119,16 @@ int adc1_update(void)
 /****************************************************************************************/
 
 /**
- * 农历年份数据表（2020-2051年）
- * 每个16位数据包含以下信息：
- * - 高4位(bit 15-12): 闰月月份，0表示当年无闰月
- * - 低12位(bit 11-0): 每个月的大小月标记，1表示大月(30天)，0表示小月(29天)
- * 例如：0x07954
- * - 0: 无闰月
- * - 7954: 从正月到十二月的大小月情况
- */
-static const uint16_t lunar_year_info[32] =
-{
-    0x07954, 0x06aa0, 0x0ad50, 0x05b52, 0x04b60, 0x0a6e6, 0x0a4e0, 0x0d260, 0x0ea65, 0x0d530, //2020-2029
-    0x05aa0, 0x076a3, 0x096d0, 0x04afb, 0x04ad0, 0x0a4d0, 0x0d0b6, 0x0d250, 0x0d520, 0x0dd45, //2030-2039
-    0x0b5a0, 0x056d0, 0x055b2, 0x049b0, 0x0a577, 0x0a4b0, 0x0aa50, 0x0b255, 0x06d20, 0x0ada0, //2040-2049
-    0x04b63, 0x09370,                                                                         //2050-2051
-};
-
-// 额外的农历年份信息，用于标记特殊年份的闰月情况
-static const uint32_t lunar_year_info2 = 0x48010000;
-
-
-/**
- * 24节气时间数据表
- * 存储了一年中24个节气相对于"小寒"的时间间隔（以秒为单位）
- * 
- * 节气顺序：
- * 1-6月：小寒、大寒、立春、雨水、惊蛰、春分
- * 7-12月：清明、谷雨、立夏、小满、芒种、夏至
- * 13-18月：小暑、大暑、立秋、处暑、白露、秋分
- * 19-24月：寒露、霜降、立冬、小雪、大雪、冬至
- */
-static int jieqi_info[] =
-{
-    0,        1272283,  2547462,  3828568,  5117483,  6416376,  // 小寒到春分
-    7726093,  9047327,  10379235, 11721860, 13072410, 14428379, // 清明到夏至
-    15787551, 17145937, 18501082, 19850188, 21190911, 22520708, // 小暑到秋分
-    23839844, 25146961, 26443845, 27730671, 29010666, 30284551, // 寒露到冬至
-};
-
-/**
- * 2020年"小寒"节气的基准时间
- * 相对于2020年1月1日的秒数
- * 用于计算其他年份的节气时间
- */
-#define xiaohan_2020  451804
-
-
-/**
  * 全局时间变量定义
- * 公历日期相关变量：
  * year: 年份，如2025
  * month: 月份，0-11表示1-12月
  * date: 日期，0-30表示1-31日
  * wday: 星期，0-6表示星期日到星期六
- * 
- * 农历日期相关变量：
- * l_year: 农历年在lunar_year_info数组中的索引，如4表示2024年
- * l_month: 农历月份，0-11表示正月到腊月，最高位1表示闰月
- * l_date: 农历日期，0-29表示初一到三十
- * 
- * 时间相关变量：
  * hour: 小时，0-23
  * minute: 分钟，0-59
  * second: 秒，0-59
  */
 int year=2025, month=0, date=0, wday=3;
-int l_year=4, l_month=11, l_date=1;
 int hour=0, minute=0, second=0;
 // 上次对时后，经过的分钟数
 int cal_minute=-1;
@@ -265,100 +207,6 @@ const unsigned char LB_31x31[31][4] = {
 };
 
 
-/**
- * 获取农历月份的天数
- * 
- * @param mon 月份编号，最高位为1表示闰月
- * @param yinfo_out 输出参数，用于返回年份信息
- * @return 返回该月的天数（29或30）
- */
-static int get_lunar_mdays(int mon, int *yinfo_out)
-{
-    // 获取闰月标志（最高位）
-    int lflag = mon&0x80;
-    // 获取实际月份（去除闰月标志）
-    mon &= 0x7f;
-
-	// 取得当年的信息
-	int yinfo = lunar_year_info[l_year];
-	if(lunar_year_info2&(1<<l_year))
-		yinfo |= 0x10000;
-
-	// 取得当月的天数
-	int mdays = 29;
-	if(lflag){
-		if(yinfo&0x10000) mdays += 1;
-	}else{
-		if(yinfo&(0x8000>>mon))	mdays += 1;
-	}
-
-	if(yinfo_out)
-		*yinfo_out = yinfo;
-	return mdays;
-}
-
-
-// 农历增加一天
-void ldate_inc(void)
-{
-	int lflag = l_month&0x80;
-	int mon = l_month&0x7f;
-	int yinfo;
-
-	int mdays = get_lunar_mdays(l_month, &yinfo);
-
-	l_date += 1;
-	if(l_date==mdays){
-		l_date = 0;
-		mon += 1;
-		if(lflag==0 && mon==(yinfo&0x0f)){
-			lflag = 0x80;
-			mon -= 1;
-		}else{
-			lflag = 0;
-		}
-		if(mon==12){
-			mon = 0;
-			l_year += 1;
-		}
-		l_month = lflag|mon;
-	}
-}
-
-
-// 给出年月日，返回是否是节气日
-int jieqi(int year, int month, int date)
-{
-	uint8_t d2m[12] = {31,28,31,30,31,30,31,31,30,31,30,31};
-	int is_leap = (year%4)? 0 : (year%100)? 1: (year%400)? 0: 1;
-	d2m[1] += is_leap;
-
-	// 计算当前日期是本年第几天
-	int i, d=0;
-	for(i=0; i<month; i++){
-		d += d2m[i];
-	}
-	d += date;
-
-	// 计算闰年的天数。因为只考虑2020-2052年，这里做了简化。
-	int Y = year-2020;
-	int L = (Y)? (Y-1)/4+1 : 0;
-	// 计算当年小寒的秒数
-	int xiaohan_sec = xiaohan_2020 + 20950*Y - L*86400;
-	//    20926是一个回归年(365.2422)不足一天的秒数(.2422*86400).
-	//    直接用有明显的误差。这里稍微增大了一点(20926+24)。
-
-	for(i=0; i<24; i++){
-		int sec = xiaohan_sec + jieqi_info[i];
-		int day = sec/86400;
-		if(day==d)
-			return i;
-	}
-
-	return -1;
-}
-
-
 /****************************************************************************************/
 
 
@@ -420,8 +268,6 @@ int clock_update(int inc)
 		if(hour>=24){
 			hour = 0;
 			date_inc();
-			ldate_inc();
-			get_holiday();
 			retv = 4;
 		}
 	}
@@ -438,23 +284,15 @@ void clock_set(uint8_t *buf)
 	int new_minute = buf[6];
 	int new_second = buf[7];
 	int new_wday   = buf[8];
-	int new_l_year = buf[9];
-	int new_l_month= buf[10];
-	int new_l_date = buf[11]-1;
 
-	// Reject out-of-range values before they can reach array-indexed
-	// lookups downstream (lunar_year_info[32] in get_lunar_mdays(),
-	// lday_str_lo[13]/lday_str_hi[5] in ldate_str()). This data comes
-	// straight from an unauthenticated BLE write.
+	// Reject out-of-range values -- this data comes straight from an
+	// unauthenticated BLE write.
 	if(new_month<0 || new_month>11)   return;
 	if(new_date<0  || new_date>30)    return;
 	if(new_hour<0  || new_hour>23)    return;
 	if(new_minute<0 || new_minute>59) return;
 	if(new_second<0 || new_second>59) return;
 	if(new_wday<0  || new_wday>6)     return;
-	if(new_l_year<0 || new_l_year>=32) return;
-	if((new_l_month&0x7f)>11)         return;
-	if(new_l_date<0 || new_l_date>29) return;
 
 	year   = new_year;
 	month  = new_month;
@@ -463,11 +301,6 @@ void clock_set(uint8_t *buf)
 	minute = new_minute;
 	second = new_second;
 	wday   = new_wday;
-	l_year = new_l_year;
-	l_month= new_l_month;
-	l_date = new_l_date;
-
-	get_holiday();
 
 	cal_minute = 0;
 
@@ -499,176 +332,16 @@ void clock_push(void)
 
 void clock_print(void)
 {
-	printk("\n%04d-%02d-%02d %02d:%02d:%02d  L: %d-%d\n", year, month+1, date+1, hour, minute, second, l_month+1, l_date+1);
+	printk("\n%04d-%02d-%02d %02d:%02d:%02d\n", year, month+1, date+1, hour, minute, second);
 }
 
 
 /****************************************************************************************/
 
-static char *jieqi_name[] = {
-	"小寒", "大寒", "立春", "雨水", "惊蛰", "春分",
-	"清明", "谷雨", "立夏", "小满", "芒种", "夏至",
-	"小暑", "大暑", "立秋", "处暑", "白露", "秋分",
-	"寒露", "霜降", "立冬", "小雪", "大雪", "冬至",
-};
-static char *wday_str[] = {"日", "一", "二", "三", "四", "五", "六"};
-static char *lday_str_lo[] = {"一", "二", "三", "四", "五", "六", "七", "八", "九", "十", "冬", "腊", "正"};
-static char *lday_str_hi[] = {"初", "十", "廿", "二", "三"};
+static char *wday_str[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 
 static int epd_wait_state;
 static timer_hnd epd_wait_hnd;
-
-typedef struct {
-    char *name;
-    uint8_t mon;
-    uint8_t day;
-}HOLIDAY_INFO;
-
-HOLIDAY_INFO hday_info[] = {
-    // 农历传统节日（0x80 表示农历日期，0xc0 表示月末）
-    {"腊八",     0x80|12,  8},   // 农历腊月初八
-    {"小年",     0x80|12, 23},   // 农历腊月廿三
-    {"除夕",     0xc0|12, 30},   // 农历腊月最后一天
-    {"春节",     0x80| 1,  1},   // 农历正月初一
-    {"元宵节",   0x80| 1, 15},   // 农历正月十五
-    {"龙抬头",   0x80| 2,  2},   // 农历二月初二
-    {"寒食节",   0x80| 3,  3},   // 农历三月初三
-    {"端午节",   0x80| 5,  5},   // 农历五月初五
-    {"七夕节",   0x80| 7,  7},   // 农历七月初七
-    {"中元节",   0x80| 7, 15},   // 农历七月十五
-    {"中秋节",   0x80| 8, 15},   // 农历八月十五
-    {"重阳节",   0x80| 9,  9},   // 农历九月初九
-    {"下元节",   0x80|10, 15},   // 农历十月十五
-
-    // 阳历法定节假日和纪念日
-    {"元旦",         1,  1},
-    {"湿地日",       2,  2},
-    {"情人节",       2, 14},
-    {"妇女节",       3,  8},
-    {"植树节",       3, 12},
-    {"权益日",       3, 15},
-    {"愚人节",       4,  1},
-    {"读书日",       4, 23},
-    {"航天日",       4, 24},
-    {"劳动节",       5,  1},
-    {"青年节",       5,  4},
-    {"护士节",       5, 12},
-    {"儿童节",       6,  1},
-    {"环境日",       6,  5},
-    {"遗产日",       6,  8},
-    {"建党节",       7,  1},
-    {"建军节",       8,  1},
-    {"抗战日",       9,  3},
-    {"教师节",       9, 10},
-    {"安全日",       9, 15},
-    {"烈士日",       9, 30},
-    {"国庆节",      10,  1},
-	{"程序员节",    10, 24},
-	{"万圣节",      10, 31},
-    {"消防日",      11,  9},
-    {"记者节",      11,  8},
-	{"光棍节",      11, 11},
-    {"宪法日",      12,  4},
-    {"志愿日",      12,  5},
-    {"公祭日",      12, 13},
-	{"圣诞节",      12, 25},
-
-    // 特殊周期性节日
-    {"母亲节",       5, 0x97},  // 5月第二个周日
-    {"父亲节",       6, 0xa7},  // 6月第三个周日
-    {"感恩节",      11, 0xa4},  // 11月第四个周四
-
-    {"",             0,  0}     // 结束标记
-};
-
-
-static char *jieqi_str = "小寒";
-static char *holiday_str = "元旦";
-
-static void ldate_str(char *buf)
-{
-	char *lflag = (l_month&0x80)? "闰" : "";
-	int lm = l_month&0x7f;
-	if(lm==0){
-		lm = 12;
-	}
-
-	int hi = l_date/10;
-	int lo = l_date%10;
-	
-	if(lo==9){
-		if(hi==1)
-			hi = 3;
-		else if(hi==2)
-			hi = 4;
-	}
-	
-	sprintf(buf, "%s%s月%s%s", lflag, lday_str_lo[lm], lday_str_hi[hi], lday_str_lo[lo]);
-}
-
-
-static void set_holiday(int index)
-{
-	if(holiday_str==NULL){
-		holiday_str = hday_info[index].name;
-	}else if(jieqi_str==NULL){
-		// 已经有一个农历节日了，将其转移到节气位置。
-		jieqi_str = holiday_str;
-		holiday_str = hday_info[index].name;
-	}else{
-		// printf("OOPS! 节日溢出!\n");
-	}
-}
-
-void get_holiday(void)
-{
-	int i;
-
-	jieqi_str = NULL;
-	holiday_str = NULL;
-
-	i = jieqi(year, month, date);
-	if(i>=0){
-		jieqi_str = jieqi_name[i];
-	}
-
-	i = 0;
-	while(hday_info[i].mon){
-		int mon = hday_info[i].mon;
-		int day = hday_info[i].day;
-		int mflag = mon&0xc0;
-		int dflag = day;
-		mon = (mon&0x0f)-1;
-		day = (day&0x1f)-1;
-		if(mflag&0x80){
-			// 农历节日
-			if(mflag&0x40){
-				// 当月最后一天
-				int mdays = get_lunar_mdays(l_month, NULL);
-				day = mdays-1;
-			}
-			if(l_month==mon && l_date==day){
-				set_holiday(i);
-			}
-		}else{
-			// 公历节日
-			if(dflag&0x80){
-				// 第几个周天
-				int wc = date/7;
-				int hwc = (dflag>>4)&0x03;
-				day &= 0x07;
-				if(month==mon && wc==hwc && wday==day){
-					set_holiday(i);
-				}
-			}else if(month==mon && date==day){
-				set_holiday(i);
-			}
-		}
-		i += 1;
-	}
-
-	return;
-}
 
 
 /****************************************************************************************/
@@ -750,13 +423,13 @@ typedef struct {
 	u16 y[8];
 }LAYOUT;
 
-// 坐标0: 公历日期
+// 坐标0: 日期
 // 坐标1: 蓝牙图标
 // 坐标2: 电池图标
 // 坐标3: 时间
-// 坐标4: 农历日期
-// 坐标5: 节气
-// 坐标6: 节日
+// 坐标4: 未使用（原农历日期，已移除）
+// 坐标5: 未使用（原节气，已移除）
+// 坐标6: 设备ID（仅蓝牙广播时显示）
 // 坐标7: 上下午
 
 LAYOUT layouts[3] = {
@@ -887,9 +560,7 @@ void LB_draw()
  * - 电池电量图标
  * - 蓝牙连接状态图标（可选）
  * - 大字号时间显示
- * - 公历日期和星期
- * - 农历日期
- * - 节气和节日信息
+ * - 日期和星期（英文）
  */
 void clock_draw(int flags)
 {
@@ -938,29 +609,21 @@ void clock_draw(int flags)
 		// 显示上午/下午
 		select_font(lt->font_char);
 		if(ampm){
-			strcpy(tbuf, "下午");
+			strcpy(tbuf, "PM");
 		}else{
-			strcpy(tbuf, "上午");
+			strcpy(tbuf, "AM");
 		}
 		draw_text(lt->x[7], lt->y[7], tbuf, BLACK);
 	}
 
-	// 显示公历日期
-	sprintf(tbuf, "%4d年%2d月%2d日   星期%s", year, month+1, date+1, wday_str[wday]);
+	// 显示日期（ISO格式 + 星期缩写）
+	sprintf(tbuf, "%04d-%02d-%02d  %s", year, month+1, date+1, wday_str[wday]);
 	select_font(lt->font_char);
 	draw_text(lt->x[0], lt->y[0], tbuf, BLACK);
 
-	// 显示农历日期(不显示年)
-	ldate_str(tbuf);
-	draw_text(lt->x[4], lt->y[4], tbuf, BLACK);
-	// 显示节气
-	if(jieqi_str)
-		draw_text(lt->x[5], lt->y[5], jieqi_str, BLACK);
-	// 显示节假日
+	// 蓝牙广播时在原节日位置显示设备ID后缀
 	if(flags&DRAW_BT){
 		draw_text(lt->x[6], lt->y[6], bt_id, BLACK);
-	}else if(holiday_str){
-		draw_text(lt->x[6], lt->y[6], holiday_str, BLACK);
 	}
 
 	// 墨水屏更新显示
@@ -1018,8 +681,8 @@ void user_svc1_long_val_wr_ind_handler(ke_msg_id_t const msgid,
 		return;
 
 	if(param->value[0]==0x91){
-		// 设置时钟 (至少需要buf[1..11]，共12字节)
-		if(len<12) return;
+		// 设置时钟 (至少需要buf[1..8]，共9字节)
+		if(len<9) return;
 		clock_set((uint8_t*)param->value);
 		// 更新显示（带蓝牙图标，快速更新模式）
 		clock_draw(DRAW_BT|UPDATE_FAST);

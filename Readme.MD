@@ -10,8 +10,7 @@ This is a fork of the original [HMCLOCK](https://github.com/tpunix/HMCLOCK) proj
 
 This project utilizes discarded **Hema Electronic Shelf Label (ESL)** hardware from supermarkets to implement a simple yet practical electronic clock with the following features:
 
-* ✅ Display date and time
-* ✅ Display Lunar calendar, Solar terms, and traditional holidays
+* ✅ Display date and time (English)
 * ✅ Display battery level
 * ✅ Bluetooth time synchronization
 * ✅ Time calibration
@@ -20,6 +19,14 @@ This project utilizes discarded **Hema Electronic Shelf Label (ESL)** hardware f
 ---
 
 ## Changelog
+
+### 0xA50f0009
+
+* Removed the lunar calendar / solar-term / traditional-holiday feature entirely (lunar date tables, solar-term calculation, holiday table, and their on-screen display).
+* Converted the on-screen date to English (ISO `YYYY-MM-DD` plus a 3-letter weekday, e.g. `2026-07-18  Sat`) and AM/PM to `AM`/`PM`.
+* Renamed the BLE device from `DLG-CLOCK-XXYYZZ` to `DCLK-XXYYZZ`.
+* Regenerated the pairing-screen QR code to point at a temporary LAN address.
+* `clock_set` (BLE `0x91`) no longer reads/validates the lunar-date bytes; the minimum accepted write length dropped from 12 to 9 bytes. The web app no longer computes or sends them.
 
 ### 0xA50f0008
 

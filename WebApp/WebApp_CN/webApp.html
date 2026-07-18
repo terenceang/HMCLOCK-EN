@@ -398,16 +398,8 @@
             minute = now.getMinutes(),
             second = now.getSeconds();
 
-        let locale_str = now.toLocaleDateString('zh-CN-u-ca-chinese',{month:'numeric',day:'numeric'});
-        let l_month = locale_str.startsWith('闰') ? 128 : 0;
-        if (l_month) locale_str = locale_str.slice(1);
-        let [l_month_num, l_day] = locale_str.split('-').map(Number);
-        l_month += l_month_num;
-        let l_year = parseInt(now.toLocaleDateString('zh-CN-u-ca-chinese',{year:'numeric'}));
-        console.log('农历年:', l_year, '月:', l_month, '日:', l_day);
-
-        let buf = new Uint8Array(12);
-        buf.set([0x91, year % 256, Math.floor(year / 256), month, mday, hour, minute, second, wday, l_year - 2020, l_month - 1, l_day]);
+        let buf = new Uint8Array(9);
+        buf.set([0x91, year % 256, Math.floor(year / 256), month, mday, hour, minute, second, wday]);
         await longValue.writeValue(buf);
 
         // 更新设备时间基准值

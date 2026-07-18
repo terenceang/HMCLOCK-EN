@@ -121,20 +121,7 @@
 			minute = today.getMinutes();
 			second = today.getSeconds();
 
-			locale_str = today.toLocaleDateString('zh-CN-u-ca-chinese',{month:'numeric',day:'numeric'});
-			l_month = 0;
-			if(locale_str.charAt(0)=='闰'){
-				l_month = 128;
-				locale_str = locale_str.substr(1,);
-			}
-			lstr_split = locale_str.split('-');
-			l_month += parseInt(lstr_split[0]);
-			l_mday   = parseInt(lstr_split[1]);
-			locale_year = today.toLocaleDateString('zh-CN-u-ca-chinese',{year:'numeric'});
-			l_year = parseInt(locale_year.substr(0,4));
-			console.log('年:', l_year, '月:', l_month, '日:', l_mday);
-
-			var buf = new Uint8Array(12);
+			var buf = new Uint8Array(9);
 			buf[0] = 0x91;
 			buf[1] = year%256;
 			buf[2] = year/256;
@@ -144,9 +131,6 @@
 			buf[6] = minute;
 			buf[7] = second;
 			buf[8] = wday;
-			buf[9] = l_year-2020;
-			buf[10]= l_month-1;
-			buf[11]= l_mday;
 			await longValue.writeValue(buf);
 
 			document.getElementById('system_time').textContent = "系统时间: "+formatTime(year, month, mday, hour, minute, second);
