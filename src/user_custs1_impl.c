@@ -338,7 +338,7 @@ void clock_print(void)
 
 /****************************************************************************************/
 
-static char *wday_str[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+static char *wday_str[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 
 static int epd_wait_state;
 static timer_hnd epd_wait_hnd;
@@ -616,7 +616,7 @@ void clock_draw(int flags)
 		draw_text(lt->x[7], lt->y[7], tbuf, BLACK);
 	}
 
-	// 显示日期（ISO格式 + 星期缩写）
+	// 显示日期（ISO格式 + 星期全称）
 	sprintf(tbuf, "%04d-%02d-%02d  %s", year, month+1, date+1, wday_str[wday]);
 	select_font(lt->font_char);
 	draw_text(lt->x[0], lt->y[0], tbuf, BLACK);
