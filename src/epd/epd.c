@@ -5,7 +5,7 @@
 
 /******************************************************************************/
 
-// 硬件参数
+// Hardware parameters
 int scr_w;
 int scr_h;
 int scr_mode;
@@ -19,7 +19,7 @@ int detect_h = 212;
 int detect_mode = EPD_BW;
 
 
-// 窗口参数
+// Window parameters
 int win_w;
 int win_h;
 
@@ -49,8 +49,8 @@ u8 lut_fast_70[80] = {
 };
 
 
-// 这里如果B-B和W->W不驱动的话，屏幕很快就会花掉。
-// 但如果驱动的话，这种黑白转换就没有意义了。
+// If B->B and W->W aren't driven here, the screen quickly gets noisy/corrupted.
+// But driving them would defeat the purpose of this black/white-only transition LUT.
 u8 lut_fly_70[80] = {
 //  RP0   RP1   RP2   RP3   RP4   RP5   RP6
     0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  // LUT0  B->B
@@ -98,8 +98,8 @@ u8 lut_fast_100[112] = {
 };
 
 
-// 这里如果B-B和W->W不驱动的话，屏幕很快就会花掉。
-// 但如果驱动的话，这种黑白转换就没有意义了。
+// If B->B and W->W aren't driven here, the screen quickly gets noisy/corrupted.
+// But driving them would defeat the purpose of this black/white-only transition LUT.
 u8 lut_fly_100[112] = {
 //  RP0   RP1   RP2   RP3   RP4   RP5   RP6   RP7   RP8   RP9
     0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  // LUT0  B->B
@@ -131,7 +131,7 @@ u8 *lut_fly  = lut_fly_70;
 /******************************************************************************/
 
 
-// x必须是8的倍数，且x2>x1, Y2>y1
+// x must be a multiple of 8, and x2>x1, y2>y1
 void epd_window(int x1, int y1, int x2, int y2)
 {
 	int tmp;

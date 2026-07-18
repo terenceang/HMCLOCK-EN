@@ -3,7 +3,8 @@
  *
  * @file user_peripheral.c
  *
- * @brief 外设项目源代码文件，主要实现BLE外设功能、时钟管理、EPD屏幕显示及OTP数据读取等功能
+ * @brief Peripheral project source file, implementing BLE peripheral functionality,
+ *        clock management, EPD screen display, OTP data reading, and related features
  *
  * Copyright (C) 2015-2023 Renesas Electronics Corporation and/or its affiliates.
  * All rights reserved. Confidential Information.
@@ -20,87 +21,90 @@
  */
 
 /*
- * 包含头文件
+ * INCLUDE FILES
  ****************************************************************************************
  */
 
-#include "rwip_config.h"             // 软件配置
-#include "gattc_task.h"              // GATT客户端任务相关定义
-#include "gap.h"                     // GAP层相关定义
-#include "app_easy_timer.h"          // 应用层定时器功能
-#include "user_peripheral.h"         // 本文件接口声明
-#include "user_custs1_impl.h"        // 自定义服务1实现
-#include "user_custs1_def.h"         // 自定义服务1定义
-#include "co_bt.h"                   // 蓝牙协议协议相关定义
-#include "hw_otpc.h"                 // OTP控制器硬件接口
+#include "rwip_config.h"             // Software configuration
+#include "gattc_task.h"              // GATT client task related definitions
+#include "gap.h"                     // GAP layer related definitions
+#include "app_easy_timer.h"          // Application-layer timer functionality
+#include "user_peripheral.h"         // This file's interface declarations
+#include "user_custs1_impl.h"        // Custom Server 1 implementation
+#include "user_custs1_def.h"         // Custom Server 1 definitions
+#include "co_bt.h"                   // Bluetooth protocol related definitions
+#include "hw_otpc.h"                 // OTP controller hardware interface
 
-#include "epd.h"                     // EPD电子纸屏幕驱动
+#include "epd.h"                     // EPD e-paper display driver
 
 /*
- * 类型定义
+ * TYPE DEFINITIONS
  ****************************************************************************************
  */
 
 
 /*
- * 全局变量定义
+ * GLOBAL VARIABLE DEFINITIONS
  ****************************************************************************************
  */
 
-int app_connection_idx                          __SECTION_ZERO("retention_mem_area0"); // 连接索引，使用 retention 内存区域保存
-timer_hnd app_clock_timer_used                  __SECTION_ZERO("retention_mem_area0"); // 时钟定时器句柄，retention内存保存
-timer_hnd app_param_update_request_timer_used   __SECTION_ZERO("retention_mem_area0"); // 参数更新请求定时器句柄，retention内存保存
+int app_connection_idx                          __SECTION_ZERO("retention_mem_area0"); // Connection index, saved in the retention memory area
+timer_hnd app_clock_timer_used                  __SECTION_ZERO("retention_mem_area0"); // Clock timer handle, saved in retention memory
+timer_hnd app_param_update_request_timer_used   __SECTION_ZERO("retention_mem_area0"); // Parameter-update-request timer handle, saved in retention memory
 
-int adv_state = 0;                          // 广播状态：0-未广播，1-正在广播
-static int otp_btaddr[2];                      // 从OTP读取的蓝牙地址
-static int otp_boot;                           // 从OTP读取的启动相关数据
-static char adv_name[20];                      // 广播名称缓冲区
-char *bt_id = adv_name+7;                      // 蓝牙ID在广播名称中的起始位置（"DCLK-"之后）
-int clock_interval;                            // 时钟更新间隔（秒）
-int clock_fixup_value;                         // 时钟修正值
-int clock_fixup_count;                         // 时钟修正计数器
-static int first_timer_trigger = 0;            // 标志：是否为第一次定时器触发（用于整分钟对齐）
-static int first_update_seconds = 0;           // 第一次触发时需要更新的秒数
+int adv_state = 0;                          // Advertising state: 0 = not advertising, 1 = advertising
+static int otp_btaddr[2];                      // Bluetooth address read from OTP
+static int otp_boot;                           // Boot-related data read from OTP
+static char adv_name[20];                      // Advertised name buffer
+char *bt_id = adv_name+7;                      // Start of the Bluetooth ID within the advertised name (right after "DCLK-")
+int clock_interval;                            // Clock update interval (seconds)
+int clock_fixup_value;                         // Clock drift correction value
+int clock_fixup_count;                         // Clock drift correction counter
+static int first_timer_trigger = 0;            // Flag: whether this is the first timer trigger (used for minute-boundary alignment)
+static int first_update_seconds = 0;           // Seconds to advance by on the first trigger
 
-// EPD版本信息（volatile确保不被优化，用于版本检测）
+// EPD version info (volatile ensures it isn't optimized away; used for version detection)
 const volatile u32 epd_version[3] = {0xF9A51379, ~0xF9A51379, EPD_VERSION};
 
-extern int year,month; // 当前时间变量
-extern int second; // 当前秒数，用于计算到整分钟的剩余时间
+extern int year,month; // Current time variables
+extern int second; // Current seconds value, used to compute the remaining time to the next minute boundary
 
 /*
- * 函数定义
+ * FUNCTION DEFINITIONS
  ****************************************************************************************
 */
 
 
 /**
  ****************************************************************************************
- * @brief 在GAPM_START_ADVERTISE_CMD参数结构的广播或扫描响应数据中添加AD结构
- * @param[in] cmd               GAPM_START_ADVERTISE_CMD参数结构
- * @param[in] ad_struct_data    AD结构数据缓冲区
- * @param[in] ad_struct_len     AD结构长度
- * @param[in] adv_connectable   是否为可连接广播事件，控制广播数据最大长度（可连接时28字节，否则31字节）
+ * @brief Add an AD structure to the advertising or scan response data of a
+ *        GAPM_START_ADVERTISE_CMD parameter structure
+ * @param[in] cmd               GAPM_START_ADVERTISE_CMD parameter structure
+ * @param[in] ad_struct_data    AD structure data buffer
+ * @param[in] ad_struct_len     AD structure length
+ * @param[in] adv_connectable   whether this is a connectable advertising event, which
+ *                              controls the max advertising data length (28 bytes if
+ *                              connectable, otherwise 31 bytes)
  ****************************************************************************************
  */
 static void app_add_ad_struct(struct gapm_start_advertise_cmd *cmd, void *ad_struct_data, uint8_t ad_struct_len, uint8_t adv_connectable)
 {
-    // 根据是否可连接确定广播数据最大长度
+    // Determine the max advertising data length based on whether it's connectable
     uint8_t adv_data_max_size = (adv_connectable) ? (ADV_DATA_LEN - 3) : (ADV_DATA_LEN);
 
-    // 优先添加到广播数据
+    // Prefer adding to the advertising data
     if ((adv_data_max_size - cmd->info.host.adv_data_len) >= ad_struct_len)
     {
         memcpy(&cmd->info.host.adv_data[cmd->info.host.adv_data_len], ad_struct_data, ad_struct_len);
         cmd->info.host.adv_data_len += ad_struct_len;
     }
-    // 广播数据空间不足时添加到扫描响应数据
+    // If there's not enough room in the advertising data, add to the scan response data
     else if ((SCAN_RSP_DATA_LEN - cmd->info.host.scan_rsp_data_len) >= ad_struct_len)
     {
         memcpy(&cmd->info.host.scan_rsp_data[cmd->info.host.scan_rsp_data_len], ad_struct_data, ad_struct_len);
         cmd->info.host.scan_rsp_data_len += ad_struct_len;
     }
-    // 空间不足时触发断言警告
+    // Trigger an assertion warning if there's no room left
     else
     {
         ASSERT_WARNING(0);
@@ -110,36 +114,36 @@ static void app_add_ad_struct(struct gapm_start_advertise_cmd *cmd, void *ad_str
 
 /**
  ****************************************************************************************
- * @brief 参数更新请求定时器回调函数
- *        当定时器超时，发起连接参数更新请求
+ * @brief Parameter-update-request timer callback
+ *        Issues a connection parameter update request once the timer expires
  ****************************************************************************************
 */
 static void param_update_request_timer_cb()
 {
-    app_easy_gap_param_update_start(app_connection_idx);  // 发起参数更新
-    app_param_update_request_timer_used = EASY_TIMER_INVALID_TIMER;  // 重置定时器句柄
+    app_easy_gap_param_update_start(app_connection_idx);  // Issue the parameter update request
+    app_param_update_request_timer_used = EASY_TIMER_INVALID_TIMER;  // Reset the timer handle
 }
 
 
 /**
  ****************************************************************************************
- * @brief 读取OTP（一次性可编程）存储器中的值
- *        主要读取蓝牙地址和启动信息，并生成广播名称
+ * @brief Read values from OTP (One-Time Programmable) memory
+ *        Primarily reads the Bluetooth address and boot info, and builds the advertised name
  ****************************************************************************************
  */
 static void read_otp_value(void)
 {
-	hw_otpc_init();               // 初始化OTP控制器
-	hw_otpc_manual_read_on(false); // 关闭手动读取模式
-	
-	// 从OTP特定地址读取数据
-	otp_boot = *(u32*)(0x07f8fe00);    // 读取启动相关数据
-	otp_btaddr[0] = *(u32*)(0x07f8ffa8); // 读取蓝牙地址低32位
-	otp_btaddr[1] = *(u32*)(0x07f8ffac); // 读取蓝牙地址高32位
-	
-	hw_otpc_disable();            // 禁用OTP控制器
+	hw_otpc_init();               // Initialize the OTP controller
+	hw_otpc_manual_read_on(false); // Disable manual read mode
 
-	// 处理蓝牙地址，生成设备唯一标识
+	// Read data from specific OTP addresses
+	otp_boot = *(u32*)(0x07f8fe00);    // Read boot-related data
+	otp_btaddr[0] = *(u32*)(0x07f8ffa8); // Read the low 32 bits of the Bluetooth address
+	otp_btaddr[1] = *(u32*)(0x07f8ffac); // Read the high 32 bits of the Bluetooth address
+
+	hw_otpc_disable();            // Disable the OTP controller
+
+	// Process the Bluetooth address to derive a unique device identifier
 	u32 ba0 = otp_btaddr[0];
 	u32 ba1 = otp_btaddr[1];
 
@@ -147,109 +151,114 @@ static void read_otp_value(void)
 	ba0 &= 0x00ffffff;
 	ba0 ^= ba1;
 
-	// 生成广播名称（格式：DCLK-XXYYZZ，XXYYZZ为蓝牙地址后三段）
+	// Build the advertised name (format: DCLK-XXYYZZ, where XXYYZZ are the last
+	// three bytes of the Bluetooth address)
 	u8 *ba = (u8*)&ba0;
 	sprintf(adv_name+2, "DCLK-%02x%02x%02x", ba[2], ba[1], ba[0]);
 	int name_len = strlen(adv_name+2);
-	
-	// 如果设备名称未设置，则使用生成的名称
+
+	// If the device name hasn't been set, use the generated name
 	if(device_info.dev_name.length==0){
 		device_info.dev_name.length = name_len;
 		memcpy(device_info.dev_name.name, adv_name+2, name_len);
 	}
 
-	// 构造AD结构：第一个字节为长度，第二个字节为AD类型（完整名称）
+	// Build the AD structure: first byte is the length, second byte is the AD
+	// type (complete name)
 	adv_name[0] = name_len+1;
 	adv_name[1] = GAP_AD_TYPE_COMPLETE_NAME;
 }
 
-// 外部声明的区域表基地址（用于内存相关操作）
+// Externally declared region table base address (used for memory-related operations)
 extern int Region$$Table$$Base;
 
 /**
  ****************************************************************************************
- * @brief 应用初始化函数
- *        初始化OTP数据、定时器、屏幕、蓝牙等模块
+ * @brief Application initialization function
+ *        Initializes OTP data, timers, the screen, Bluetooth, and other modules
  ****************************************************************************************
  */
 void user_app_init(void)
 {
-	read_otp_value();  // 读取OTP数据，初始化广播名称
+	read_otp_value();  // Read OTP data and build the advertised name
 
 	printk("\n\nuser_app_init! %s %08x\n", __TIME__, epd_version[2]);
-    app_param_update_request_timer_used = EASY_TIMER_INVALID_TIMER;  // 初始化参数更新定时器
-	app_clock_timer_used = EASY_TIMER_INVALID_TIMER;                 // 初始化时钟定时器
+    app_param_update_request_timer_used = EASY_TIMER_INVALID_TIMER;  // Initialize the parameter-update timer
+	app_clock_timer_used = EASY_TIMER_INVALID_TIMER;                 // Initialize the clock timer
 
-	clock_interval = 60; // 时钟更新间隔设置为60秒
-	clock_fixup_value = 0; // 初始化时钟修正值
-	clock_fixup_count = 0; // 初始化时钟修正计数器
+	clock_interval = 60; // Set the clock update interval to 60 seconds
+	clock_fixup_value = 0; // Initialize the clock drift correction value
+	clock_fixup_count = 0; // Initialize the clock drift correction counter
 
-	first_timer_trigger = 0; // 初始化第一次触发标志
+	first_timer_trigger = 0; // Initialize the first-trigger flag
 
-	adv_state = 0; // 初始化为未广播状态
-	fspi_config(0x00030605); // 配置FSPI接口
+	adv_state = 0; // Initialize to the not-advertising state
+	fspi_config(0x00030605); // Configure the FSPI interface
 
-	selflash(otp_boot); // 根据OTP启动数据执行自闪存操作
+	selflash(otp_boot); // Perform the self-flash operation based on the OTP boot data
 
-	// 初始化EPD屏幕（2.13黑白屏，6个测试点）
+	// Initialize the EPD screen (2.13" black/white, 6 test points)
 	epd_hw_init(0x23200700, 0x05210006, detect_w, detect_h, detect_mode | ROTATE_3);
-	if(epd_detect()==0){  // 如果检测不到屏幕，尝试另一种配置（5个测试点）
+	if(epd_detect()==0){  // If the screen isn't detected, try the other pinout (5 test points)
 		epd_hw_init(0x23111000, 0x07210120, detect_w, detect_h, detect_mode | ROTATE_3);
 		epd_detect();
 	}
 
-	app_connection_idx = -1; // 初始化连接索引为无效值
-    default_app_on_init();   // 执行默认应用初始化
+	app_connection_idx = -1; // Initialize the connection index to invalid
+    default_app_on_init();   // Run the default application initialization
 }
 
 
 /**
  ****************************************************************************************
- * @brief 时钟快慢修正函数
- * @param[in] diff_sec  自上次对时后的误差秒数（正数表示快了，负数表示慢了）
- * @param[in] minutes   自上次对时后经过的分钟数
- * @note 计算并累积时钟修正值，用于调整定时器间隔，补偿时钟误差
+ * @brief Clock drift correction function
+ * @param[in] diff_sec  the error in seconds since the last time sync (positive = fast, negative = slow)
+ * @param[in] minutes   minutes elapsed since the last time sync
+ * @note Computes and accumulates the clock correction value, used to adjust the timer
+ *       interval and compensate for clock drift
  ****************************************************************************************
  */
 void clock_fixup_set(int diff_sec, int minutes)
 {
-	// 计算新的修正值（基于4096精度的分数计算）
+	// Compute the new correction value (fixed-point, 4096 = 1.0)
 	int new_fixup_value = diff_sec*100*4096/minutes;
-	clock_fixup_value += new_fixup_value; // 累积修正值
+	clock_fixup_value += new_fixup_value; // Accumulate the correction value
 }
 
 
 /**
  ****************************************************************************************
- * @brief 应用时钟修正值
- * @return 本次需要调整的毫秒数
- * @note 从累积的修正计数器中提取整数部分作为本次调整值，保留余数
+ * @brief Apply the clock correction value
+ * @return the number of milliseconds to adjust by this time
+ * @note Extracts the integer part from the accumulated correction counter as this
+ *       cycle's adjustment, keeping the remainder for next time
  ****************************************************************************************
  */
 static int clock_fixup(void)
 {
 	int value;
 
-	clock_fixup_count += clock_fixup_value; // 累积修正计数
+	clock_fixup_count += clock_fixup_value; // Accumulate the correction counter
 
-	value = clock_fixup_count>>12; // 右移12位（除以4096）得到整数部分
-	clock_fixup_count &= 0xfff;    // 保留低12位作为余数
+	value = clock_fixup_count>>12; // Shift right by 12 bits (divide by 4096) to get the integer part
+	clock_fixup_count &= 0xfff;    // Keep the low 12 bits as the remainder
 
-	return value; // 返回本次调整的毫秒数
+	return value; // Return this cycle's adjustment in milliseconds
 }
 
-extern int adcval;  // ADC电压值变量
+extern int adcval;  // ADC voltage value variable
 /**
  ****************************************************************************************
- * @brief 应用时钟定时器回调函数
- *        定时更新时钟、推送时钟数据、处理屏幕显示，并根据需要重启广播
+ * @brief Application clock timer callback
+ *        Periodically updates the clock, pushes clock data, handles the screen
+ *        display, and restarts advertising when needed
  ****************************************************************************************
  */
 static void app_clock_timer_cb(void)
 {
-	int adj = clock_fixup(); // 获取时钟修正值
+	int adj = clock_fixup(); // Get the clock correction value
 	int update_seconds;
-	
+
 	if(first_timer_trigger) {
 		first_timer_trigger = 0;
 		update_seconds = first_update_seconds;
@@ -257,54 +266,54 @@ static void app_clock_timer_cb(void)
 	} else {
 		update_seconds = clock_interval;
 	}
-	
-	// 重启定时器，应用修正后的间隔（单位：10ms，故乘以100）
+
+	// Restart the timer, applying the corrected interval (units: 10ms, hence x100)
 	app_clock_timer_used = app_easy_timer(clock_interval*100+adj, app_clock_timer_cb);
 
-	// 确定屏幕更新标志（根据时钟状态）
-	int flags = UPDATE_FLY; // 默认快速更新
-	// 更新时钟并打印
+	// Determine the screen update flags (based on clock state)
+	int flags = UPDATE_FLY; // Fast update by default
+	// Update the clock and print it
 	int stat = clock_update(update_seconds);
 	clock_print();
 
-	// 如果已连接，则推送时钟数据
+	// If connected, push the clock data
 	if(app_connection_idx!=-1){
 		clock_push();
 	}
-	
-    //未进行初始化,则始终展示二维码
+
+    // Not yet configured -- always show the pairing QR code
     if(year==2025 && month<=5){
-        // 在2024年2月执行特定操作（占位符）
+        // Placeholder gate for "not configured yet"
         QR_draw();
-        user_app_adv_start();//持续开启广播
+        user_app_adv_start(); // Keep advertising continuously
         return;
     }
 
-    // 如果是快速更新，更新ADC数据,若电量不足则不继续执行任务
+    // On a fast-update tick, refresh the ADC reading; stop further work if the battery is low
 	if(flags==4){
 		adc1_update();
-		//ADC电压小于2.6V
+		// ADC voltage below 2.6V
         if(adcval<1360){
-					//绘制低电量图标
+					// Draw the low-battery icon
             LB_draw();
-					//清除定时器唤醒任务
+					// Cancel the timer so it stops waking the device
 					app_easy_timer_cancel(app_clock_timer_used);
             return;
         }
 	}
 
 	if(stat>=3){
-		flags = DRAW_BT | UPDATE_FULL; // 需要蓝牙图标+全量更新
+		flags = DRAW_BT | UPDATE_FULL; // Needs the Bluetooth icon + a full update
 	}else if(stat>=2){
-		flags = DRAW_BT | UPDATE_FAST; // 需要蓝牙图标+快速更新
+		flags = DRAW_BT | UPDATE_FAST; // Needs the Bluetooth icon + a fast update
 	}
 
-	// 如果需要显示蓝牙图标，启动广播
+	// Start advertising if the Bluetooth icon needs to be shown
 	if(flags&DRAW_BT){
 		user_app_adv_start();
 	}
 
-	// 根据状态或标志更新屏幕显示
+	// Update the screen based on the state or flags
 	if(stat>0 || flags&DRAW_BT){
 		clock_draw(flags);
 	}
@@ -313,84 +322,89 @@ static void app_clock_timer_cb(void)
 
 /**
  ****************************************************************************************
- * @brief 重启应用时钟定时器
- *        计算到下一个整分钟的剩余秒数，设置定时器使其在整分钟时触发
+ * @brief Restart the application clock timer
+ *        Computes the remaining seconds to the next minute boundary and arms the
+ *        timer to fire exactly on that boundary
  ****************************************************************************************
  */
 void app_clock_timer_restart(void)
 {
-	app_easy_timer_cancel(app_clock_timer_used); // 取消当前定时器
-	
-	// 计算到下一个整分钟的剩余秒数
+	app_easy_timer_cancel(app_clock_timer_used); // Cancel the current timer
+
+	// Compute the remaining seconds to the next minute boundary
 	int remaining_seconds = (second == 0) ? 60 : (60 - second);
-	
-	// 保存第一次触发时需要更新的秒数（使时钟进位到整分钟）
+
+	// Save the number of seconds to advance by on the first trigger (so the
+	// clock lands exactly on a minute boundary)
 	first_update_seconds = remaining_seconds;
-	
-	// 标记为第一次触发，用于在回调中正确处理时钟更新
+
+	// Mark this as the first trigger, so the callback handles the clock
+	// update correctly
 	first_timer_trigger = 1;
-	
-	// 第一次在整分钟触发，之后每60秒触发一次
+
+	// Fires first on the minute boundary, then every 60 seconds after that
 	app_clock_timer_used = app_easy_timer(remaining_seconds*100, app_clock_timer_cb);
 }
 
 
 /**
  ****************************************************************************************
- * @brief 数据库初始化完成回调函数
- *        当GATT数据库初始化完成后调用，初始化ADC、显示时钟并启动广播
+ * @brief Database initialization complete callback
+ *        Called once the GATT database has finished initializing; initializes the
+ *        ADC, draws the clock, and starts advertising
  ****************************************************************************************
  */
 void user_app_on_db_init_complete( void )
 {
 	printk("\nuser_app_on_db_init_complete!\n");
 
-	// 更新ADC值并打印电压
+	// Update the ADC value and print the voltage
 	int adcval = adc1_update();
 	printk("Voltage: %d\n", adcval);
 
-	// 打印并推送时钟数据
+	// Print and push the clock data
 	clock_print();
 	clock_push();
 
-	// 绘制时钟（带蓝牙图标+全量更新）并启动广播
+	// Draw the clock (with Bluetooth icon + full update) and start advertising
 	//clock_draw(DRAW_BT|UPDATE_FULL);
 	QR_draw();
 	user_app_adv_start();
 
-	// 启动时钟定时器，对齐到整分钟
+	// Start the clock timer, aligned to the minute boundary
 	app_clock_timer_restart();
 }
 
 
 /**
  ****************************************************************************************
- * @brief 启动应用广播
- *        构造广播数据（包含设备名称和EPD版本），并启动带超时的无向广播
+ * @brief Start application advertising
+ *        Builds the advertising data (device name + EPD version) and starts
+ *        undirected advertising with a timeout
  ****************************************************************************************
  */
 void user_app_adv_start(void)
 {
-	u8 vbuf[4]; // 版本信息AD结构缓冲区
+	u8 vbuf[4]; // Version-info AD structure buffer
 
-	// 如果已在广播状态，直接返回
+	// Return immediately if already advertising
 	if(adv_state)
 		return;
-	adv_state = 1; // 标记为正在广播
+	adv_state = 1; // Mark as advertising
 
-    // 获取广播命令结构
+    // Get the advertising command structure
 	struct gapm_start_advertise_cmd* cmd = app_easy_gap_undirected_advertise_get_active();
-	// 添加设备名称AD结构
+	// Add the device-name AD structure
 	app_add_ad_struct(cmd, adv_name, adv_name[0]+1, 1);
 
-	// 构造版本信息AD结构（长度+类型+版本号低两位）
+	// Build the version-info AD structure (length + type + low two version bytes)
 	vbuf[0] = 0x03;
 	vbuf[1] = GAP_AD_TYPE_MANU_SPECIFIC_DATA;
 	vbuf[2] = EPD_VERSION&0xff;
 	vbuf[3] = (EPD_VERSION>>8)&0xff;
 	app_add_ad_struct(cmd, vbuf, vbuf[0]+1, 1);
 
-	// 启动带超时的无向广播
+	// Start undirected advertising with a timeout
 	app_easy_gap_undirected_advertise_with_timeout_start(user_default_hnd_conf.advertise_period, NULL);
 	printk("\nuser_app_adv_start! %s\n", adv_name+2);
 }
@@ -398,27 +412,29 @@ void user_app_adv_start(void)
 
 /**
  ****************************************************************************************
- * @brief 连接事件回调函数
- *        当收到连接请求时调用，更新连接索引，检查连接参数并在需要时请求参数更新
- * @param[in] connection_idx 连接索引
- * @param[in] param          连接请求参数
+ * @brief Connection event callback
+ *        Called when a connection request is received; updates the connection index,
+ *        checks the connection parameters, and requests a parameter update if needed
+ * @param[in] connection_idx connection index
+ * @param[in] param          connection request parameters
  ****************************************************************************************
  */
 void user_app_connection(uint8_t connection_idx, struct gapc_connection_req_ind const *param)
 {
 	printk("user_app_connection: %d\n", connection_idx);
 
-    // 检查连接是否有效
+    // Check whether the connection is valid
     if (app_env[connection_idx].conidx != GAP_INVALID_CONIDX)
     {
-        app_connection_idx = connection_idx; // 更新连接索引
+        app_connection_idx = connection_idx; // Update the connection index
 
-		// 打印连接参数
+		// Print the connection parameters
 		printk("  interval: %d\n", param->con_interval);
 		printk("  latency : %d\n", param->con_latency);
 		printk("  sup_to  : %d\n", param->sup_to);
-        
-        // 检查连接参数是否符合预期，不符合则调度参数更新请求
+
+        // Check whether the connection parameters match expectations; if not,
+        // schedule a parameter update request
         if ((param->con_interval < user_connection_param_conf.intv_min) ||
             (param->con_interval > user_connection_param_conf.intv_max) ||
             (param->con_latency != user_connection_param_conf.latency) ||
@@ -426,33 +442,35 @@ void user_app_connection(uint8_t connection_idx, struct gapc_connection_req_ind 
         {
             app_param_update_request_timer_used = app_easy_timer(APP_PARAM_UPDATE_REQUEST_TO, param_update_request_timer_cb);
         }
-		
-		// 推送时钟数据到客户端
+
+		// Push the clock data to the client
 		clock_push();
     } else {
-		adv_state = 0; // 连接无效时，标记为未广播
+		adv_state = 0; // Mark as not advertising if the connection is invalid
     }
 
-    // 执行默认连接处理
+    // Run the default connection handling
     default_app_on_connection(connection_idx, param);
 }
 
 /**
  ****************************************************************************************
- * @brief 无向广播完成回调函数
- *        当广播超时或异常结束时调用，更新广播状态并刷新屏幕
- * @param[in] status 广播结束状态码
+ * @brief Undirected advertising complete callback
+ *        Called when advertising times out or ends abnormally; updates the
+ *        advertising state and refreshes the screen
+ * @param[in] status advertising end status code
  ****************************************************************************************
  */
 void user_app_adv_undirect_complete(uint8_t status)
 {
 	printk("user_app_adv_undirect_complete: %02x\n", status);
-	// 状态非0表示异常结束，更新广播状态并刷新屏幕
+	// A non-zero status means it ended abnormally; update the advertising
+	// state and refresh the screen
 	if(status!=0){
 		adv_state = 0;
-		//未进行初始化,则始终展示二维码
+		// Not yet configured -- always show the pairing QR code
     if(year==2025 && month<=5){
-        // 在2024年2月执行特定操作（占位符）
+        // Placeholder gate for "not configured yet"
         QR_draw();
     }
 		else
@@ -463,32 +481,35 @@ void user_app_adv_undirect_complete(uint8_t status)
 
 /**
  ****************************************************************************************
- * @brief 断开连接回调函数
- *        当连接断开时调用，清理定时器，更新连接状态，并根据断开原因决定是否重启广播
- * @param[in] param 断开连接参数（包含断开原因）
+ * @brief Disconnect callback
+ *        Called when the connection is dropped; cleans up timers, updates the
+ *        connection state, and decides whether to restart advertising based on
+ *        the disconnect reason
+ * @param[in] param disconnect parameters (includes the disconnect reason)
  ****************************************************************************************
  */
 void user_app_disconnect(struct gapc_disconnect_ind const *param)
 {
 	printk("user_app_disconnect! reason=%02x\n", param->reason);
 
-    // 取消参数更新请求定时器
+    // Cancel the parameter-update-request timer
     if (app_param_update_request_timer_used != EASY_TIMER_INVALID_TIMER)
     {
         app_easy_timer_cancel(app_param_update_request_timer_used);
         app_param_update_request_timer_used = EASY_TIMER_INVALID_TIMER;
     }
 
-	app_connection_idx = -1; // 重置连接索引为无效值
-	adv_state = 0; // 标记为未广播
+	app_connection_idx = -1; // Reset the connection index to invalid
+	adv_state = 0; // Mark as not advertising
 
-	// 非远程用户主动断开时，重启广播；否则仅刷新屏幕
+	// Restart advertising unless the remote user initiated the disconnect;
+	// otherwise just refresh the screen
 	if(param->reason!=CO_ERROR_REMOTE_USER_TERM_CON){
 		user_app_adv_start();
 	}else{
-		    //未进行初始化,则始终展示二维码
+		    // Not yet configured -- always show the pairing QR code
     if(year==2025 && month<=5){
-        // 在2024年2月执行特定操作（占位符）
+        // Placeholder gate for "not configured yet"
         QR_draw();
     }
 		else
@@ -500,12 +521,13 @@ void user_app_disconnect(struct gapc_disconnect_ind const *param)
 
 /**
  ****************************************************************************************
- * @brief 未处理消息的捕获处理函数
- *        处理各类未被默认处理的消息，包括特征值读写、参数更新、MTU变更等事件
- * @param[in] msgid   消息ID
- * @param[in] param   消息参数
- * @param[in] dest_id 目标任务ID
- * @param[in] src_id  源任务ID
+ * @brief Catch-all handler for unhandled messages
+ *        Handles various messages not covered by the default handlers, including
+ *        characteristic reads/writes, parameter updates, MTU changes, and more
+ * @param[in] msgid   message ID
+ * @param[in] param   message parameters
+ * @param[in] dest_id destination task ID
+ * @param[in] src_id  source task ID
  ****************************************************************************************
  */
 void user_catch_rest_hndl(ke_msg_id_t const msgid,
@@ -515,12 +537,12 @@ void user_catch_rest_hndl(ke_msg_id_t const msgid,
 {
     switch(msgid)
     {
-        // 特征值写入通知（值已写入数据库）
+        // Characteristic value write indication (value has been written to the database)
         case CUSTS1_VAL_WRITE_IND:
         {
             struct custs1_val_write_ind const *msg_param = (struct custs1_val_write_ind const *)(param);
 
-            // 根据句柄分发到对应的处理函数
+            // Dispatch to the appropriate handler based on the handle
             switch (msg_param->handle)
             {
                 case SVC1_IDX_CONTROL_POINT_VAL:
@@ -536,22 +558,22 @@ void user_catch_rest_hndl(ke_msg_id_t const msgid,
             }
         } break;
 
-        // Notification确认（请求已发出）
+        // Notification confirm (request has been sent)
         case CUSTS1_VAL_NTF_CFM:
         {
         } break;
 
-        // Indication确认（请求已发出）
+        // Indication confirm (request has been sent)
         case CUSTS1_VAL_IND_CFM:
         {
         } break;
 
-        // 读ATT_INFO请求（需要返回数据）
+        // ATT_INFO read request (a response is required)
         case CUSTS1_ATT_INFO_REQ:
         {
             struct custs1_att_info_req const *msg_param = (struct custs1_att_info_req const *)param;
 
-            // 根据属性索引分发处理
+            // Dispatch based on the attribute index
             switch (msg_param->att_idx)
             {
                 case SVC1_IDX_LONG_VALUE_VAL:
@@ -564,17 +586,17 @@ void user_catch_rest_hndl(ke_msg_id_t const msgid,
              }
         } break;
 
-        // 连接参数更新通知
+        // Connection parameters updated indication
         case GAPC_PARAM_UPDATED_IND:
         {
             struct gapc_param_updated_ind const *msg_param = (struct gapc_param_updated_ind const *)(param);
 			printk("GAPC_PARAM_UPDATED_IND!\n");
-			// 打印更新后的参数
+			// Print the updated parameters
 			printk("  interval: %d\n", msg_param->con_interval);
 			printk("  latency : %d\n", msg_param->con_latency);
 			printk("  sup_to  : %d\n", msg_param->sup_to);
 
-            // 检查更新后的参数是否符合预期
+            // Check whether the updated parameters match expectations
             if ((msg_param->con_interval >= user_connection_param_conf.intv_min) &&
                 (msg_param->con_interval <= user_connection_param_conf.intv_max) &&
                 (msg_param->con_latency == user_connection_param_conf.latency) &&
@@ -584,13 +606,13 @@ void user_catch_rest_hndl(ke_msg_id_t const msgid,
             }
         } break;
 
-        // 特征值读取请求
+        // Characteristic value read request
         case CUSTS1_VALUE_REQ_IND:
         {
 			printk("CUSTS1_VALUE_REQ_IND!\n");
             struct custs1_value_req_ind const *msg_param = (struct custs1_value_req_ind const *) param;
 
-            // 处理未定义的读取请求，返回错误
+            // Handle undefined read requests by returning an error
             switch (msg_param->att_idx)
             {
                 default:
@@ -609,7 +631,7 @@ void user_catch_rest_hndl(ke_msg_id_t const msgid,
              }
         } break;
 
-        // GATT事件请求指示（确认未处理的指示以避免超时）
+        // GATT event request indication (confirm unhandled indications to avoid a timeout)
         case GATTC_EVENT_REQ_IND:
         {
             struct gattc_event_ind const *ind = (struct gattc_event_ind const *) param;
@@ -617,15 +639,15 @@ void user_catch_rest_hndl(ke_msg_id_t const msgid,
             cfm->handle = ind->handle;
             KE_MSG_SEND(cfm);
         } break;
-		
-		// MTU（最大传输单元）变更指示
+
+		// MTU (Maximum Transmission Unit) changed indication
 		case GATTC_MTU_CHANGED_IND:
 		{
 			struct gattc_mtu_changed_ind *ind = (struct gattc_mtu_changed_ind *) param;
 			printk("GATTC_MTU_CHANGED_IND: %d\n", ind->mtu);
 		} break;
 
-        // 未处理的消息
+        // Unhandled message
         default:
 		{
 			printk("Unhandled msgid=%08x\n", msgid);

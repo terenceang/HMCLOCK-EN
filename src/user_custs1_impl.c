@@ -12,12 +12,12 @@
  * affiliates ("Renesas"). Renesas grants you a personal, non-exclusive, non-transferable,
  * revocable, non-sub-licensable right and license to use the Software, solely if used in
  * or together with Renesas products. You may make copies of this Software, provided this
- * copyright notice and disclaimer ("Notice") is included in all such copies. Renesas
+ * copyright notice and disclaimer ("Notice") is included in all such copies. Renesas
  * reserves the right to change or discontinue the Software at any time without notice.
  *
  * THE SOFTWARE IS PROVIDED "AS IS". RENESAS DISCLAIMS ALL WARRANTIES OF ANY KIND,
  * WHETHER EXPRESS, IMPLIED, OR STATUTORY, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
- * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. TO THE
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. TO THE
  * MAXIMUM EXTENT PERMITTED UNDER LAW, IN NO EVENT SHALL RENESAS BE LIABLE FOR ANY DIRECT,
  * INDIRECT, SPECIAL, INCIDENTAL OR CONSEQUENTIAL DAMAGES ARISING FROM, OUT OF OR IN
  * CONNECTION WITH THE SOFTWARE, EVEN IF RENESAS HAS BEEN ADVISED OF THE POSSIBILITY OF
@@ -36,36 +36,37 @@
  ****************************************************************************************
  */
 
-#include "gpio.h"               // GPIO控制相关头文件
-#include "app_api.h"            // 应用程序API
-#include "app.h"                // 应用程序核心功能
-#include "prf_utils.h"          // BLE配置文件工具
-#include "custs1.h"             // 自定义服务1
-#include "custs1_task.h"        // 自定义服务1任务
-#include "user_custs1_def.h"    // 自定义服务1定义
-#include "user_custs1_impl.h"   // 自定义服务1实现
-#include "user_peripheral.h"    // 用户外设相关
-#include "user_periph_setup.h"  // 用户外设设置
-#include "adc.h"                // ADC(模数转换)相关
+#include "gpio.h"               // GPIO control header
+#include "app_api.h"            // Application API
+#include "app.h"                // Core application functionality
+#include "prf_utils.h"          // BLE profile utilities
+#include "custs1.h"             // Custom Server 1
+#include "custs1_task.h"        // Custom Server 1 task
+#include "user_custs1_def.h"    // Custom Server 1 definitions
+#include "user_custs1_impl.h"   // Custom Server 1 implementation
+#include "user_peripheral.h"    // User peripheral related
+#include "user_periph_setup.h"  // User peripheral setup
+#include "adc.h"                // ADC (analog-to-digital converter) related
 
-#include "epd.h"                // 电子墨水屏驱动
+#include "epd.h"                // E-paper display driver
 
 /*
- * 全局变量定义
- * 这些变量使用__SECTION_ZERO("retention_mem_area0")属性放置在掉电保持内存区域
+ * GLOBAL VARIABLE DEFINITIONS
+ * These variables use the __SECTION_ZERO("retention_mem_area0") attribute to
+ * place them in the power-loss-retained memory area
  ****************************************************************************************
  */
 
-// 定时器ID，用于系统定时任务
+// Timer ID, used for scheduled system tasks
 ke_msg_id_t timer_used      __SECTION_ZERO("retention_mem_area0"); //@RETENTION MEMORY
-// 指示计数器，用于BLE通知计数
+// Indication counter, used for BLE notification counting
 uint16_t indication_counter __SECTION_ZERO("retention_mem_area0"); //@RETENTION MEMORY
-// 非数据库值计数器
+// Non-database value counter
 uint16_t non_db_val_counter __SECTION_ZERO("retention_mem_area0"); //@RETENTION MEMORY
-// ADC采样值，用于电池电量检测
+// ADC sample value, used for battery level detection
 int adcval;
 
-static uint8_t h24_format = 1; // 24小时制标志
+static uint8_t h24_format = 1; // 24-hour format flag
 
 extern int adv_state;
 /*
@@ -75,43 +76,43 @@ extern int adv_state;
 
 
 /**
- * @brief 更新ADC采样值并通过BLE发送电池电压数据
- * 
- * 该函数执行以下操作：
- * 1. 校准ADC偏移量
- * 2. 获取电池电压采样值
- * 3. 将采样值转换为实际电压值
- * 4. 通过BLE发送电压值给连接的设备
- * 
- * @return 返回计算后的电压值
+ * @brief Update the ADC sample value and send the battery voltage over BLE
+ *
+ * This function performs the following:
+ * 1. Calibrate the ADC offset
+ * 2. Sample the battery voltage
+ * 3. Convert the sample to an actual voltage value
+ * 4. Send the voltage value to the connected device over BLE
+ *
+ * @return The computed voltage value
  */
 int adc1_update(void)
 {
-    // 校准ADC偏移，使用单端输入模式
+    // Calibrate the ADC offset, using single-ended input mode
     adc_offset_calibrate(ADC_INPUT_MODE_SINGLE_ENDED);
-    // 获取电池电压采样值
+    // Sample the battery voltage
     adcval = adc_get_vbat_sample(false);
-    // 将ADC值转换为实际电压值 (单位: mV)
+    // Convert the ADC value to an actual voltage value (units: mV)
     int volt = (adcval*225)>>7;
 
-    // 分配内存并构造BLE消息
-    struct custs1_val_set_req *req = KE_MSG_ALLOC_DYN(CUSTS1_VAL_SET_REQ, 
-                                                      prf_get_task_from_id(TASK_ID_CUSTS1), 
-                                                      TASK_APP, 
-                                                      custs1_val_set_req, 
+    // Allocate memory and build the BLE message
+    struct custs1_val_set_req *req = KE_MSG_ALLOC_DYN(CUSTS1_VAL_SET_REQ,
+                                                      prf_get_task_from_id(TASK_ID_CUSTS1),
+                                                      TASK_APP,
+                                                      custs1_val_set_req,
                                                       DEF_SVC1_ADC_VAL_1_CHAR_LEN);
-    // 设置连接索引
+    // Set the connection index
     req->conidx = app_env->conidx;
-    // 设置特征值句柄
+    // Set the characteristic value handle
     req->handle = SVC1_IDX_ADC_VAL_1_VAL;
-    // 设置数据长度
+    // Set the data length
     req->length = DEF_SVC1_ADC_VAL_1_CHAR_LEN;
-    // 设置电压值（16位，低字节在前）
+    // Set the voltage value (16-bit, low byte first)
     req->value[0] = volt&0xff;
     req->value[1] = volt>>8;
-    // 发送BLE消息
+    // Send the BLE message
     KE_MSG_SEND(req);
-    
+
     return volt;
 }
 
@@ -119,18 +120,18 @@ int adc1_update(void)
 /****************************************************************************************/
 
 /**
- * 全局时间变量定义
- * year: 年份，如2025
- * month: 月份，0-11表示1-12月
- * date: 日期，0-30表示1-31日
- * wday: 星期，0-6表示星期日到星期六
- * hour: 小时，0-23
- * minute: 分钟，0-59
- * second: 秒，0-59
+ * Global time variable definitions
+ * year: the year, e.g. 2025
+ * month: month, 0-11 represents Jan-Dec
+ * date: day of month, 0-30 represents 1st-31st
+ * wday: weekday, 0-6 represents Sunday-Saturday
+ * hour: hour, 0-23
+ * minute: minute, 0-59
+ * second: second, 0-59
  */
 int year=2025, month=0, date=0, wday=3;
 int hour=0, minute=0, second=0;
-// 上次对时后，经过的分钟数
+// Minutes elapsed since the last time sync
 int cal_minute=-1;
 
 
@@ -220,13 +221,13 @@ static int get_month_day(int mon)
 }
 
 
-// 增加1天
+// Advance by 1 day
 void date_inc(void)
 {
 	wday += 1;
 	if(wday>=7)
 		wday = 0;
-	
+
 	date += 1;
 	if(date==get_month_day(month)){
 		date = 0;
@@ -238,11 +239,11 @@ void date_inc(void)
 	}
 }
 
-// 0: 状态不变
-// 1: 分钟改变
-// 2: 分钟改变10分钟
-// 3: 小时改变
-// 4: 天数改变
+// 0: no change
+// 1: minute changed
+// 2: minute changed, on a 10-minute boundary
+// 3: hour changed
+// 4: day changed
 
 int clock_update(int inc)
 {
@@ -367,28 +368,28 @@ static uint8_t batt_cal(uint16_t adc_sample)
 
 
 /**
- * 绘制电池电量图标
- * 
- * @param x 图标左上角的x坐标
- * @param y 图标中心的y坐标
- * 
- * 图标说明：
- * - 外框大小：16x8像素
- * - 电量显示：根据实际电量百分比填充内部
- * - 电池正极：2x2像素
+ * Draw the battery level icon
+ *
+ * @param x top-left X coordinate of the icon
+ * @param y center Y coordinate of the icon
+ *
+ * Icon details:
+ * - Outer frame size: 16x8 pixels
+ * - Level display: fills the interior based on the actual battery percentage
+ * - Battery positive terminal: 2x2 pixels
  */
 static void draw_batt(int x, int y)
 {
-    // 获取电池电量百分比并转换为显示段数（0-10）
+    // Get the battery percentage and convert it to a fill-segment count (0-10)
     int p = batt_cal(adcval);
     p /= 10;
 
-    // 绘制电池外框
+    // Draw the battery outer frame
     draw_rect(x, y-4, x+14, y+4, BLACK);
-    // 绘制电池正极
+    // Draw the battery positive terminal
     draw_box(x-2, y-1, x-1, y+1, BLACK);
 
-    // 绘制电量填充部分
+    // Draw the fill portion representing the level
     draw_box(x+12-p, y-2, x+12, y+2, BLACK);
 }
 
@@ -400,12 +401,12 @@ const u8 font_bt[] = {
 };
 
 /**
- * 绘制蓝牙图标
- * 
- * @param x 图标中心的x坐标
- * @param y 图标中心的y坐标
- * 
- * 图标说明: 一个8x15的字符
+ * Draw the Bluetooth icon
+ *
+ * @param x center X coordinate of the icon
+ * @param y center Y coordinate of the icon
+ *
+ * Icon details: an 8x15 glyph
  */
 static void draw_bt(int x, int y)
 {
@@ -423,14 +424,14 @@ typedef struct {
 	u16 y[8];
 }LAYOUT;
 
-// 坐标0: 日期（顶部，x仅用y，水平方向居中绘制）
-// 坐标1: 蓝牙图标（旁边紧跟设备ID，仅蓝牙广播时显示）
-// 坐标2: 电池图标
-// 坐标3: 时间（中部，x仅用y，水平方向居中绘制）
-// 坐标4: 未使用（原农历日期，已移除）
-// 坐标5: 未使用（原节气，已移除）
-// 坐标6: 星期（底部，x仅用y，水平方向居中绘制）
-// 坐标7: 上下午（紧跟时间右侧动态定位，仅使用此y坐标）
+// slot 0: date (top, only y is used, drawn horizontally centered)
+// slot 1: Bluetooth icon (device ID follows right next to it, shown only while advertising)
+// slot 2: battery icon
+// slot 3: time (middle, only y is used, drawn horizontally centered)
+// slot 4: unused (formerly the lunar date, now removed)
+// slot 5: unused (formerly the solar term, now removed)
+// slot 6: weekday (bottom, only y is used, drawn horizontally centered)
+// slot 7: AM/PM (positioned dynamically right after the time, only this y is used)
 
 LAYOUT layouts[3] = {
 	{212, 104, 0, 1,
@@ -463,34 +464,34 @@ void select_layout(int xres, int yres)
 
 
 /**
- * 电子墨水屏更新等待定时器
- * 
- * 功能说明：
- * - 检查电子墨水屏是否处于忙状态
- * - 如果忙，则40ms后再次检查
- * - 如果空闲，则完成更新流程并进入省电模式
- * 
- * 电子墨水屏更新完成后的处理：
- * 1. 发送深度睡眠命令(0x10, 0x01)
- * 2. 关闭电源
- * 3. 关闭硬件接口
- * 4. 设置系统进入扩展睡眠模式
+ * E-paper screen update wait timer
+ *
+ * Behavior:
+ * - Checks whether the e-paper screen is busy
+ * - If busy, checks again after 40ms
+ * - If idle, finishes the update sequence and enters power-saving mode
+ *
+ * Once the e-paper update completes:
+ * 1. Send the deep sleep command (0x10, 0x01)
+ * 2. Power off
+ * 3. Close the hardware interface
+ * 4. Put the system into extended sleep mode
  */
 static void epd_wait_timer(void)
 {
     if(epd_busy()){
-        // 屏幕仍在忙，40ms后再次检查
+        // Screen is still busy, check again in 40ms
         epd_wait_hnd = app_easy_timer(40, epd_wait_timer);
     }else{
-        // 屏幕更新完成
+        // Screen update complete
         epd_wait_hnd = EASY_TIMER_INVALID_TIMER;
-        // 发送深度睡眠命令
+        // Send the deep sleep command
         epd_cmd1(0x10, 0x01);
-        // 关闭电源
+        // Power off
         epd_power(0);
-        // 关闭硬件接口
+        // Close the hardware interface
         epd_hw_close();
-        // 设置系统进入扩展睡眠模式
+        // Put the system into extended sleep mode
         arch_set_sleep_mode(ARCH_EXT_SLEEP_ON);
     }
 }
@@ -500,7 +501,7 @@ void QR_draw()
 {
 	char tbuf[16];
 
-	// 此处添加QR码绘制逻辑
+	// QR code drawing logic goes here
 	epd_hw_open();
 
 	epd_update_mode(UPDATE_FULL);
@@ -510,57 +511,58 @@ void QR_draw()
 
 	draw_qr_code(5, 5, 3, QR_31x31);
 	draw_text(100, 5,"Bluetooth", BLACK);
-	// 设备名一次性绘制为单个连续字符串（DCLK-XXYYZZ），避免拆成两次draw_text
-	// 在固定x坐标下产生视觉断行。
+	// Draw the device name as a single contiguous string (DCLK-XXYYZZ) in one
+	// call, rather than splitting it across two draw_text calls at fixed x
+	// positions, which produced a visual gap.
 	sprintf(tbuf, "DCLK-%s", bt_id);
 	draw_text(100, 20, tbuf, BLACK);
 
 	draw_text(110,40,"-------------",BLACK);
-	
+
 	draw_text(100, 60, "Scan the QR code", BLACK);
 	draw_text(100, 75, "with your browser", BLACK);
-	// 墨水屏更新显示
+	// Update the e-paper display
 	epd_init();
 	epd_screen_update();
 	epd_update();
-	// 更新时如果深度休眠，会花屏。 这里暂时关闭休眠。
+	// Deep sleep during an update causes screen corruption. Temporarily disable sleep.
 	arch_set_sleep_mode(ARCH_SLEEP_OFF);
 	epd_wait_hnd = app_easy_timer(40, epd_wait_timer);
 }
 
 void LB_draw()
 {
-	// 此处添加低电压码的绘制逻辑
+	// Low-battery icon drawing logic goes here
 	epd_hw_open();
 
 	epd_update_mode(UPDATE_FULL);
 
 	memset(fb_bw, 0xff, scr_h*line_bytes);
-	memset(fb_rr, 0x00, scr_h*line_bytes);	
+	memset(fb_rr, 0x00, scr_h*line_bytes);
 
 	draw_qr_code(60, 10, 4, LB_31x31);
 
-	// 墨水屏更新显示
+	// Update the e-paper display
 	epd_init();
 	epd_screen_update();
 	epd_update();
-	// 更新时如果深度休眠，会花屏。 这里暂时关闭休眠。
+	// Deep sleep during an update causes screen corruption. Temporarily disable sleep.
 	arch_set_sleep_mode(ARCH_SLEEP_OFF);
 	epd_wait_hnd = app_easy_timer(40, epd_wait_timer);
 }
 
 /**
- * 绘制时钟界面
- * 
- * @param flags 显示控制标志
- *             bit0-1: 更新模式（快速/正常）
- *             bit2: 是否显示蓝牙图标
- * 
- * 显示内容包括：
- * - 电池电量图标
- * - 蓝牙连接状态图标（可选）
- * - 大字号时间显示
- * - 日期和星期（英文）
+ * Draw the clock screen
+ *
+ * @param flags display control flags
+ *              bit0-1: update mode (fast/normal)
+ *              bit2: whether to show the Bluetooth icon
+ *
+ * Displayed content includes:
+ * - Battery level icon
+ * - Bluetooth connection icon (optional)
+ * - Large-digit time display
+ * - Date and weekday (English)
  */
 void clock_draw(int flags)
 {
@@ -580,25 +582,25 @@ void clock_draw(int flags)
 
 	int cx = lt->xres/2;
 
-	// 显示电池电量
+	// Draw the battery level
 	draw_batt(lt->x[2], lt->y[2]);
 	if(flags&DRAW_BT){
-		// 显示蓝牙图标
+		// Draw the Bluetooth icon
 		draw_bt(lt->x[1], lt->y[1]);
 	}
 
-	// 顶部居中显示日期（DD-MM-YYYY）
+	// Top, center-drawn date (DD-MM-YYYY)
 	sprintf(tbuf, "%02d-%02d-%04d", date+1, month+1, year);
 	select_font(lt->font_char);
 	draw_text_centered(cx, lt->y[0], tbuf, BLACK);
 
-	// 中间居中显示时间（大字）
+	// Middle, center-drawn time (large digits)
 	select_font(lt->font_dseg);
 	if(h24_format){
-		// 24小时制
+		// 24-hour format
 		sprintf(tbuf, "%02d:%02d", hour, minute);
 	}else{
-		// 12小时制
+		// 12-hour format
 		int h = hour;
 		int ampm = 0;
 		if(h>=12){
@@ -606,7 +608,7 @@ void clock_draw(int flags)
 				h -= 12;
 			ampm = 1;
 		}else if(h==0){
-			h = 12; // 0点显示为12点
+			h = 12; // midnight is displayed as 12
 		}
 		sprintf(tbuf, "%2d:%02d", h, minute);
 	}
@@ -616,7 +618,7 @@ void clock_draw(int flags)
 		draw_text(tx, lt->y[3], tbuf, BLACK);
 
 		if(!h24_format){
-			// 上午/下午紧跟在时间右侧
+			// AM/PM immediately follows the time on its right
 			int h = hour;
 			int ampm = (h>=12);
 			select_font(lt->font_char);
@@ -624,7 +626,7 @@ void clock_draw(int flags)
 		}
 	}
 
-	// 底部居中显示星期（蓝牙广播时附带设备ID后缀）
+	// Bottom, center-drawn weekday (device ID suffix appended while advertising)
 	select_font(lt->font_char);
 	if(flags&DRAW_BT){
 		sprintf(tbuf, "%s  %s", wday_str[wday], bt_id);
@@ -633,11 +635,11 @@ void clock_draw(int flags)
 		draw_text_centered(cx, lt->y[6], wday_str[wday], BLACK);
 	}
 
-	// 墨水屏更新显示
+	// Update the e-paper display
 	epd_init();
 	epd_screen_update();
 	epd_update();
-	// 更新时如果深度休眠，会花屏。 这里暂时关闭休眠。
+	// Deep sleep during an update causes screen corruption. Temporarily disable sleep.
 	arch_set_sleep_mode(ARCH_SLEEP_OFF);
 	epd_wait_hnd = app_easy_timer(40, epd_wait_timer);
 }
@@ -647,35 +649,35 @@ void clock_draw(int flags)
 
 
 /**
- * 控制点写入指示处理函数
- * 
- * @param msgid 消息ID
- * @param param 写入参数
- * @param dest_id 目标任务ID
- * @param src_id 源任务ID
- * 
- * 处理通过BLE接收到的控制命令
+ * Control point write indication handler
+ *
+ * @param msgid message ID
+ * @param param write parameters
+ * @param dest_id destination task ID
+ * @param src_id source task ID
+ *
+ * Handles control commands received over BLE
  */
-void user_svc1_ctrl_wr_ind_handler(ke_msg_id_t const msgid, 
-                                  struct custs1_val_write_ind const *param, 
-                                  ke_task_id_t const dest_id, 
+void user_svc1_ctrl_wr_ind_handler(ke_msg_id_t const msgid,
+                                  struct custs1_val_write_ind const *param,
+                                  ke_task_id_t const dest_id,
                                   ke_task_id_t const src_id)
 {
-    // 打印接收到的控制命令
+    // Print the received control command
     printk("Control Point: %02x\n", param->value[0]);
 }
 
 /**
- * 长值特征写入指示处理函数
- * 
- * @param msgid 消息ID
- * @param param 写入参数
- * @param dest_id 目标任务ID
- * @param src_id 源任务ID
- * 
- * 处理命令：
- * - 0x91: 时钟设置命令
- * - 0xA0及以上: OTA升级相关命令
+ * Long value characteristic write indication handler
+ *
+ * @param msgid message ID
+ * @param param write parameters
+ * @param dest_id destination task ID
+ * @param src_id source task ID
+ *
+ * Handles commands:
+ * - 0x91: clock-set command
+ * - 0xA0 and above: OTA update related commands
  */
 void user_svc1_long_val_wr_ind_handler(ke_msg_id_t const msgid,
                                       struct custs1_val_write_ind const *param,
@@ -688,19 +690,19 @@ void user_svc1_long_val_wr_ind_handler(ke_msg_id_t const msgid,
 		return;
 
 	if(param->value[0]==0x91){
-		// 设置时钟 (至少需要buf[1..8]，共9字节)
+		// Set the clock (needs at least buf[1..8], 9 bytes total)
 		if(len<9) return;
 		clock_set((uint8_t*)param->value);
-		// 更新显示（带蓝牙图标，快速更新模式）
+		// Update the display (with Bluetooth icon, fast update mode)
 		clock_draw(DRAW_BT|UPDATE_FAST);
-		// 打印当前时间信息
+		// Print the current time
 		clock_print();
 	}else if(param->value[0]==0x90){
-		//修改24-12小时制
+		// Toggle 24/12-hour format
 		h24_format = !h24_format;
 		clock_draw(DRAW_BT|UPDATE_FAST);
 	}else if(param->value[0]==0x92){
-		// 时间校准 (至少需要buf[1..2]，共3字节)
+		// Time calibration (needs at least buf[1..2], 3 bytes total)
 		if(len<3) return;
 		int diff_sec;
 		diff_sec  = param->value[1];
@@ -710,41 +712,41 @@ void user_svc1_long_val_wr_ind_handler(ke_msg_id_t const msgid,
 		clock_fixup_set(diff_sec, cal_minute);
 		cal_minute = 0;
 	}else if(param->value[0]>=0xa0){
-		// 处理OTA升级命令
+		// Handle OTA update commands
 		ota_handle((u8*)param->value, len);
     }
 }
 
 /**
- * 长值特征属性信息请求处理函数
- * 
- * @param msgid 消息ID
- * @param param 请求参数
- * @param dest_id 目标任务ID
- * @param src_id 源任务ID
- * 
- * 响应BLE客户端的属性信息请求
+ * Long value characteristic attribute info request handler
+ *
+ * @param msgid message ID
+ * @param param request parameters
+ * @param dest_id destination task ID
+ * @param src_id source task ID
+ *
+ * Responds to a BLE client's attribute info request
  */
-void user_svc1_long_val_att_info_req_handler(ke_msg_id_t const msgid, 
-                                            struct custs1_att_info_req const *param, 
-                                            ke_task_id_t const dest_id, 
+void user_svc1_long_val_att_info_req_handler(ke_msg_id_t const msgid,
+                                            struct custs1_att_info_req const *param,
+                                            ke_task_id_t const dest_id,
                                             ke_task_id_t const src_id)
 {
-    // 分配响应消息内存
-    struct custs1_att_info_rsp *rsp = KE_MSG_ALLOC(CUSTS1_ATT_INFO_RSP, 
-                                                   src_id, 
-                                                   dest_id, 
+    // Allocate the response message
+    struct custs1_att_info_rsp *rsp = KE_MSG_ALLOC(CUSTS1_ATT_INFO_RSP,
+                                                   src_id,
+                                                   dest_id,
                                                    custs1_att_info_rsp);
-    // 设置连接索引
+    // Set the connection index
     rsp->conidx  = app_env[param->conidx].conidx;
-    // 设置属性索引
+    // Set the attribute index
     rsp->att_idx = param->att_idx;
-    // 设置长度为0
+    // Set the length to 0
     rsp->length  = 0;
-    // 设置状态为无错误
+    // Set the status to no error
     rsp->status  = ATT_ERR_NO_ERROR;
 
-    // 发送响应消息
+    // Send the response message
     KE_MSG_SEND(rsp);
 }
 
@@ -768,4 +770,3 @@ void user_svc1_rest_att_info_req_handler(ke_msg_id_t const msgid,
 
     KE_MSG_SEND(rsp);
 }
-

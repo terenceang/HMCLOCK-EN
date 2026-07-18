@@ -384,7 +384,7 @@ int selflash(int otp_boot)
 
 	memset(pbuf, 0, 256);
 	if(otp_boot==0x1234a5a5){
-		// 从OTP启动。读product header。
+		// Booted from OTP. Read the product header.
 		sf_read(0x38000, 16, pbuf);
 		if(pbuf[0]!=0x70 || pbuf[1]!=0x52){
 			printk("Build Product header ...\n");
@@ -398,13 +398,13 @@ int selflash(int otp_boot)
 		image_addr[0] = p32[1];
 		image_addr[1] = p32[2];
 
-		// 读image header
+		// Read the image headers
 		sf_read(image_addr[0], 32, pbuf+0 );
 		sf_read(image_addr[1], 32, pbuf+32);
 		printk("Product iamge0: %08x:  %08x %08x %08x %08x\n", image_addr[0], __REV(p32[0]), p32[1], p32[2], p32[7]);
 		printk("        iamge1: %08x:  %08x %08x %08x %08x\n", image_addr[1], __REV(p32[8]), p32[9], p32[10],p32[15]);
 
-		// 获取当前使用的image的id
+		// Determine the id of the currently active image
 		image_flag[0] = -1;
 		image_flag[1] = -1;
 		if(pbuf[ 0]==0x70 && pbuf[ 1]==0x51 && pbuf[ 2]==0xaa){
@@ -417,15 +417,15 @@ int selflash(int otp_boot)
 		printk("Active image: %d  flag: %02x\n", active, image_flag[active]);
 		
 		if(EPD_VERSION != p32[active*8+7]){
-			// 当前运行的固件与flash中的固件不同
-			// 将当前固件写入非活动的image中
+			// The currently running firmware differs from what's in flash;
+			// write the running firmware into the inactive image slot.
 			int new_flag = image_flag[active]+1;
 			int new_id = active^1;
-			
-			// 擦除flash
+
+			// Erase flash
 			printk("Erase %08x ...\n", image_addr[new_id]);
 			sf_erase(image_addr[new_id], firm_size+64, 1);
-			// 初始化image header
+			// Initialize the image header
 			memset(pbuf, 0xff, 64);
 			p32[0] = (new_flag<<24)|0x00aa5170;
 			p32[1] = firm_size;
@@ -433,7 +433,7 @@ int selflash(int otp_boot)
 			p32[7] = EPD_VERSION;
 			pbuf[0x20] = 0;
 
-			// 写入flash
+			// Write to flash
 			u8 *firm_data = (u8*)0x07fc0000;
 			int addr = image_addr[new_id];
 			for(int i=0; i<firm_size+64; i+=256){
@@ -452,7 +452,7 @@ int selflash(int otp_boot)
 		}
 
 	}else{
-		// 从Flash启动。读Boot header。
+		// Booted from Flash. Read the boot header.
 		sf_read(0, 16, pbuf);
 		printk("Boot Header: %08x %08x\n", *(u32*)(pbuf+0), *(u32*)(pbuf+4));
 	}
@@ -489,8 +489,8 @@ int ota_handle(u8 *buf, int len)
 	int image_flag[2];
 
 	if(buf[0]==0xa0){
-		// 升级开始
-		// 先擦除非活动固件
+		// Update starting
+		// Erase the inactive firmware slot first
 		if(len<4) return -1;
 		ota_state = 1;
 		ota_crc = 0;
@@ -509,11 +509,11 @@ int ota_handle(u8 *buf, int len)
 		image_addr[1] = p32[2];
 		printk("image0: %08x   image1: %08x\n", image_addr[0], image_addr[1]);
 
-		// 读image header
+		// Read the image headers
 		sf_read(image_addr[0], 32, pbuf+0 );
 		sf_read(image_addr[1], 32, pbuf+32);
 
-		// 获取当前使用的image的id
+		// Determine the id of the currently active image
 		image_flag[0] = -1;
 		image_flag[1] = -1;
 		if(pbuf[ 0]==0x70 && pbuf[ 1]==0x51 && pbuf[ 2]==0xaa){
@@ -527,17 +527,17 @@ int ota_handle(u8 *buf, int len)
 		int new_id = active^1;
 
 		firm_addr = image_addr[new_id];
-		// 擦除flash
+		// Erase flash
 		printk("Erase %08x - %08x ...\n", firm_addr, firm_addr+firm_size+64);
 		sf_erase(firm_addr, firm_size+64, 1);
 
 		arch_set_sleep_mode(ARCH_SLEEP_OFF);
 	}else if(buf[0]==0xa2){
-		// 传输page的前128字节
+		// Transfer the first 128 bytes of the page
 		if(len<136) return -1;
 		memcpy(ota_buf, buf+8, 128);
 	}else if(buf[0]==0xa3){
-		// 传输page的后128字节
+		// Transfer the last 128 bytes of the page
 		if(len<136) return -1;
 		memcpy(ota_buf+128, buf+8, 128);
 

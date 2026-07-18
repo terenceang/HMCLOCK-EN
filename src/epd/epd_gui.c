@@ -6,7 +6,7 @@
 /******************************************************************************/
 
 
-// FB参数
+// Framebuffer parameters
 int fb_w;
 int fb_h;
 
@@ -102,12 +102,12 @@ void draw_box(int x1, int y1, int x2, int y2, int color)
 
 
 /**
- * 绘制二维码到墨水屏
+ * Draw a QR code to the e-paper screen
  *
- * @param start_x   绘制起始X位置
- * @param start_y   绘制起始Y位置
- * @param pix_size  每个二维码像素点的宽高（单位像素）
- * @param img       二维码C数组，尺寸31x4，每行4字节
+ * @param start_x   drawing start X position
+ * @param start_y   drawing start Y position
+ * @param pix_size  width/height of each QR module (in pixels)
+ * @param img       QR code C array, sized 31x4, 4 bytes per row
  */
 void draw_qr_code(
     int start_x,
@@ -118,12 +118,12 @@ void draw_qr_code(
     for (int y = 0; y < 31; y++) {
         for (int x = 0; x < 31; x++) {
 
-            int byte_idx = x / 8;       // 每4字节一行，8bit一个字节
-            int bit_idx = 7 - (x % 8);  // 图像从高位到低位存储
+            int byte_idx = x / 8;       // 4 bytes per row, 8 bits per byte
+            int bit_idx = 7 - (x % 8);  // image stored MSB-first
             int bit = (img[y][byte_idx] >> bit_idx) & 1;
             int color = (bit == 0) ? WHITE : BLACK;
 
-            // 放大绘制
+            // Draw scaled up
             int x1 = start_x + x * pix_size;
             int y1 = start_y + y * pix_size;
             int x2 = x1 + pix_size - 1;
@@ -254,7 +254,7 @@ void draw_text(int x, int y, char *str, int color)
 }
 
 
-// 计算字符串在当前字体下的总像素宽度（不实际绘制）
+// Compute the total pixel width of a string in the current font (without drawing it)
 int text_width(char *str)
 {
 	int w = 0;
@@ -273,7 +273,7 @@ int text_width(char *str)
 }
 
 
-// 以cx为水平中心，居中绘制字符串
+// Draw a string horizontally centered on cx
 void draw_text_centered(int cx, int y, char *str, int color)
 {
 	int w = text_width(str);
@@ -284,13 +284,13 @@ void draw_text_centered(int cx, int y, char *str, int color)
 /******************************************************************************/
 #if 0
 char *wday_str[] = {
-	"一",
-	"二",
-	"三",
-	"四",
-	"五",
-	"六",
-	"日",
+	"Mon",
+	"Tue",
+	"Wed",
+	"Thu",
+	"Fri",
+	"Sat",
+	"Sun",
 };
 
 
@@ -318,7 +318,7 @@ void fb_test(void)
 	select_font(0);
 
 	char tbuf[64];
-	sprintk(tbuf, "%4d年%2d月%2d日 星期%s", 2025, 4, 29, wday_str[wday]);
+	sprintk(tbuf, "%4d-%2d-%2d %s", 2025, 4, 29, wday_str[wday]);
 	draw_text(15, 85, tbuf, BLACK);
 	
 	wday += 1;
