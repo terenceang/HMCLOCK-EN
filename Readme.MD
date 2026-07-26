@@ -10,7 +10,7 @@ This is a fork of the original [HMCLOCK](https://github.com/tpunix/HMCLOCK) proj
 
 This project utilizes discarded **Hema Electronic Shelf Label (ESL)** hardware from supermarkets to implement a simple yet practical electronic clock with the following features:
 
-* ✅ Display date and time (English)
+* ✅ Analog clock + calendar card display (weekday, day, month, year)
 * ✅ Display battery level
 * ✅ Bluetooth time synchronization
 * ✅ Time calibration
@@ -19,6 +19,26 @@ This project utilizes discarded **Hema Electronic Shelf Label (ESL)** hardware f
 ---
 
 ## Changelog
+
+### 0xA50f000c
+
+* Redesigned the clock screen: an analog clock face card on the left, an iOS-style calendar icon card on the right (weekday header, big day-of-month, month + year), both sized to fill nearly the whole screen.
+* Moved the battery and Bluetooth status icons into the clock card's top-left corner.
+* Fixed a `draw_pixel()` bug where `WHITE` was a no-op (it only ever cleared pixels, never set them), which silently broke drawing white text over a black-filled background — needed for the calendar card's inverted weekday header.
+* Added bold and letter-spaced ("kerned") text-drawing primitives to `epd_gui.c`, used to keep the calendar card's small text legible at this size.
+* Added an English translation of the Web Bluetooth control page (`WebApp/WebApp_EN/webApp.html`), alongside the existing Chinese one.
+* Added a Light/Dark/System theme toggle to both web app versions.
+* Added a matching analog-clock + calendar-card preview to both web app versions, shown by default — driven by the connected device's time, or system time when not connected.
+
+### 0xA50f000b
+
+* Translated the remaining Chinese code comments to English across `epd.c`, `epd_gui.c`, `spi_flash.c`, `user_custs1_impl.c`, `user_peripheral.c`.
+* Added hardware pinout documentation (`Hardware/HINK-E0213A41-FPC.md`) and pinout reference PDFs.
+* Added the initial Web Bluetooth control-center web app (`WebApp/WebApp_CN/webApp.html`) for connecting, time sync, firmware update, and calibration.
+
+### 0xA50f000a
+
+* Bolded the 7-segment clock digits (`font50.h`/`font66.h`) by dilating each glyph 1px inward on every stroke; glyph dimensions/advance widths unchanged.
 
 ### 0xA50f0009
 
