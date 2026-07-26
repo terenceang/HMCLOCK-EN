@@ -42,7 +42,9 @@ void draw_pixel(int x, int y, int color)
 	int byte_pos = ny*line_bytes+(nx>>3);
 	int bit_mask = 0x80>>(nx&7);
 
-	if(color!=WHITE){
+	if(color==WHITE){
+		fb_bw[byte_pos] |= bit_mask;
+	}else{
 		fb_bw[byte_pos] &= ~bit_mask;
 	}
 	if(scr_mode&EPD_BWR && color==RED){
@@ -93,9 +95,56 @@ void draw_rect(int x1, int y1, int x2, int y2, int color)
 void draw_box(int x1, int y1, int x2, int y2, int color)
 {
 	int y;
-	
+
 	for(y=y1; y<=y2; y++){
 		draw_hline(y, x1, x2, color);
+	}
+}
+
+
+// Bresenham line, works for any slope/direction
+void draw_line(int x1, int y1, int x2, int y2, int color)
+{
+	int dx = (x2>x1) ? (x2-x1) : (x1-x2);
+	int dy = (y2>y1) ? (y1-y2) : (y2-y1); // kept negative, as the algorithm expects
+	int sx = (x1<x2) ? 1 : -1;
+	int sy = (y1<y2) ? 1 : -1;
+	int err = dx+dy, e2;
+
+	while(1){
+		draw_pixel(x1, y1, color);
+		if(x1==x2 && y1==y2)
+			break;
+		e2 = 2*err;
+		if(e2>=dy){ err += dy; x1 += sx; }
+		if(e2<=dx){ err += dx; y1 += sy; }
+	}
+}
+
+
+// Midpoint circle algorithm (outline only)
+void draw_circle(int cx, int cy, int r, int color)
+{
+	int x = r, y = 0, err = 0;
+
+	while(x>=y){
+		draw_pixel(cx+x, cy+y, color);
+		draw_pixel(cx+y, cy+x, color);
+		draw_pixel(cx-y, cy+x, color);
+		draw_pixel(cx-x, cy+y, color);
+		draw_pixel(cx-x, cy-y, color);
+		draw_pixel(cx-y, cy-x, color);
+		draw_pixel(cx+y, cy-x, color);
+		draw_pixel(cx+x, cy-y, color);
+
+		y += 1;
+		if(err<=0){
+			err += 2*y+1;
+		}
+		if(err>0){
+			x -= 1;
+			err -= 2*x+1;
+		}
 	}
 }
 
@@ -278,6 +327,186 @@ void draw_text_centered(int cx, int y, char *str, int color)
 {
 	int w = text_width(str);
 	draw_text(cx - w/2, y, str, color);
+}
+
+
+// Faux-bold: draw the string twice, offset by 1px, to thicken strokes on small fonts
+// that otherwise render as a single thin pixel-wide line.
+void draw_text_bold(int x, int y, char *str, int color)
+{
+	draw_text(x, y, str, color);
+	draw_text(x+1, y, str, color);
+}
+
+
+void draw_text_centered_bold(int cx, int y, char *str, int color)
+{
+	int w = text_width(str);
+	draw_text_bold(cx - w/2, y, str, color);
+}
+
+
+// Draw text with extra fixed spacing ("kerning") inserted after every glyph's normal advance
+void draw_text_kerned(int x, int y, char *str, int spacing, int color)
+{
+	int ch;
+
+	while(1){
+		ch = utf8_to_ucs(&str);
+		if(ch==0)
+			break;
+		x += fb_draw_font(x, y, ch, color) + spacing;
+	}
+}
+
+
+int text_width_kerned(char *str, int spacing)
+{
+	int w = 0, ch, n = 0;
+
+	while(1){
+		ch = utf8_to_ucs(&str);
+		if(ch==0)
+			break;
+		const u8 *font_data = find_font(current_font, ch);
+		if(font_data)
+			w += font_data[0]; // ft_adv
+		n += 1;
+	}
+	if(n>0)
+		w += spacing*(n-1);
+
+	return w;
+}
+
+
+void draw_text_centered_kerned(int cx, int y, char *str, int spacing, int color)
+{
+	int w = text_width_kerned(str, spacing);
+	draw_text_kerned(cx - w/2, y, str, spacing, color);
+}
+
+
+// Faux-bold + letter-spaced: for small text that needs to read clearly at a distance
+void draw_text_centered_kerned_bold(int cx, int y, char *str, int spacing, int color)
+{
+	int w = text_width_kerned(str, spacing);
+	int x = cx - w/2;
+
+	draw_text_kerned(x, y, str, spacing, color);
+	draw_text_kerned(x+1, y, str, spacing, color);
+}
+
+
+// Draw a glyph scaled up by an integer factor (each source pixel becomes a scale x scale block)
+int fb_draw_font_info_scaled(int x, int y, const u8 *font_data, int scale, int color)
+{
+	int r, c;
+
+	int ft_adv = font_data[0];
+	int ft_bw = font_data[1];
+	int ft_bh = font_data[2];
+	int ft_bx = (signed char)font_data[3];
+	int ft_by = (signed char)font_data[4];
+	int ft_lsize = (ft_bw+7)/8;
+	font_data += 5;
+
+	x += ft_bx*scale;
+	y += ft_by*scale;
+
+	for (r=0; r<ft_bh; r++) {
+		for (c=0; c<ft_bw; c++) {
+			int b = font_data[c>>3];
+			int mask = 0x80>>(c%8);
+			if(b&mask){
+				draw_box(x+c*scale, y, x+c*scale+scale-1, y+scale-1, color);
+			}
+		}
+		font_data += ft_lsize;
+		y += scale;
+	}
+
+	return ft_adv*scale;
+}
+
+
+int fb_draw_font_scaled(int x, int y, int ucs, int scale, int color)
+{
+	const u8 *font_data = find_font(current_font, ucs);
+	if(font_data==NULL){
+		printf("fb_draw_scaled %04x: not found!\n", ucs);
+		return -1;
+	}
+
+	return fb_draw_font_info_scaled(x, y, font_data, scale, color);
+}
+
+
+void draw_text_scaled(int x, int y, char *str, int scale, int color)
+{
+	int ch;
+
+	while(1){
+		ch = utf8_to_ucs(&str);
+		if(ch==0)
+			break;
+		x += fb_draw_font_scaled(x, y, ch, scale, color);
+	}
+}
+
+
+int text_width_scaled(char *str, int scale)
+{
+	return text_width(str)*scale;
+}
+
+
+// Draw a string horizontally centered on cx, scaled up by an integer factor
+void draw_text_scaled_centered(int cx, int y, char *str, int scale, int color)
+{
+	int w = text_width_scaled(str, scale);
+	draw_text_scaled(cx - w/2, y, str, scale, color);
+}
+
+
+// Scaled text with extra fixed spacing ("kerning") inserted after every glyph's advance
+void draw_text_scaled_kerned(int x, int y, char *str, int scale, int spacing, int color)
+{
+	int ch;
+
+	while(1){
+		ch = utf8_to_ucs(&str);
+		if(ch==0)
+			break;
+		x += fb_draw_font_scaled(x, y, ch, scale, color) + spacing;
+	}
+}
+
+
+int text_width_scaled_kerned(char *str, int scale, int spacing)
+{
+	int w = 0, ch, n = 0;
+
+	while(1){
+		ch = utf8_to_ucs(&str);
+		if(ch==0)
+			break;
+		const u8 *font_data = find_font(current_font, ch);
+		if(font_data)
+			w += font_data[0]*scale; // ft_adv
+		n += 1;
+	}
+	if(n>0)
+		w += spacing*(n-1);
+
+	return w;
+}
+
+
+void draw_text_scaled_centered_kerned(int cx, int y, char *str, int scale, int spacing, int color)
+{
+	int w = text_width_scaled_kerned(str, scale, spacing);
+	draw_text_scaled_kerned(cx - w/2, y, str, scale, spacing, color);
 }
 
 

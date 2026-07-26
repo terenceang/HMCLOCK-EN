@@ -129,7 +129,7 @@ int adc1_update(void)
  * minute: minute, 0-59
  * second: second, 0-59
  */
-int year=2025, month=0, date=0, wday=3;
+int year=2026, month=0, date=0, wday=3;
 int hour=0, minute=0, second=0;
 // Minutes elapsed since the last time sync
 int cal_minute=-1;
@@ -339,7 +339,8 @@ void clock_print(void)
 
 /****************************************************************************************/
 
-static char *wday_str[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+static char *wday_str[] = {"SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"};
+static char *month_str[] = {"JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"};
 
 static int epd_wait_state;
 static timer_hnd epd_wait_hnd;
@@ -418,34 +419,14 @@ static void draw_bt(int x, int y)
 
 typedef struct {
 	int xres, yres;
-	int font_char;
-	int font_dseg;
-	u16 x[8];
-	u16 y[8];
 }LAYOUT;
 
-// slot 0: date (top, only y is used, drawn horizontally centered)
-// slot 1: Bluetooth icon (device ID follows right next to it, shown only while advertising)
-// slot 2: battery icon
-// slot 3: time (middle, only y is used, drawn horizontally centered)
-// slot 4: unused (formerly the lunar date, now removed)
-// slot 5: unused (formerly the solar term, now removed)
-// slot 6: weekday (bottom, only y is used, drawn horizontally centered)
-// slot 7: AM/PM (positioned dynamically right after the time, only this y is used)
-
+// Panel resolutions the card layout is proportioned against (see clock_draw()); only the
+// 212x104 panel is actually populated on the HMCLOCK board (see Hardware/HINK-E0213A41-FPC.md).
 LAYOUT layouts[3] = {
-	{212, 104, 0, 1,
-		{15, 172, 190,  16,  12,  98, 150, 12},
-		{ 6,   7,  14,  27,  82,  82,  82, 44},
-	},
-	{250, 122, 2, 3,
-		{15, 206, 226,  12,  12, 118, 176, 15},
-		{ 6,   8,  15,  28,  98,  98,  98, 50},
-	},
-	{296, 128, 2, 3,
-		{15, 246, 268,  30,  12, 140, 220, 15,},
-		{ 6,   8,  15,  30, 102, 102, 102, 52,},
-	},
+	{212, 104},
+	{250, 122},
+	{296, 128},
 };
 
 int current_layout = 0;
@@ -551,23 +532,134 @@ void LB_draw()
 	epd_wait_hnd = app_easy_timer(40, epd_wait_timer);
 }
 
+// Integer sin(deg)*1000 for deg=0..90; other quadrants derived by symmetry in isin()/icos().
+// Avoids pulling in float/libm on a Cortex-M0 target for what is only ever a once-a-minute redraw.
+static const int sin_tab[91] = {
+	0, 17, 35, 52, 70, 87, 105, 122, 139, 156,
+	174, 191, 208, 225, 242, 259, 276, 292, 309, 326,
+	342, 358, 375, 391, 407, 423, 438, 454, 469, 485,
+	500, 515, 530, 545, 559, 574, 588, 602, 616, 629,
+	643, 656, 669, 682, 695, 707, 719, 731, 743, 755,
+	766, 777, 788, 799, 809, 819, 829, 839, 848, 857,
+	866, 875, 883, 891, 899, 906, 914, 921, 927, 934,
+	940, 946, 951, 956, 961, 966, 970, 974, 978, 982,
+	985, 988, 990, 993, 995, 996, 998, 999, 999, 1000,
+	1000,
+};
+
+static int isin(int deg)
+{
+	int sign = 1;
+
+	deg %= 360;
+	if(deg<0)
+		deg += 360;
+	if(deg>180){
+		sign = -1;
+		deg -= 180;
+	}
+	if(deg>90)
+		deg = 180-deg;
+
+	return sign*sin_tab[deg];
+}
+
+static int icos(int deg)
+{
+	return isin(deg+90);
+}
+
+
 /**
- * Draw the clock screen
+ * Draw an analog clock face (dial, hour ticks, hour/minute hands) centered at (cx, cy)
+ */
+static void draw_clock_face(int cx, int cy, int r)
+{
+	int i;
+
+	draw_circle(cx, cy, r, BLACK);
+
+	// Hour ticks, longer at 12/3/6/9
+	for(i=0; i<12; i++){
+		int ang = i*30;
+		int outer = r-2;
+		int inner = (i%3==0) ? r-9 : r-5;
+		int x1t = cx + (outer*isin(ang))/1000;
+		int y1t = cy - (outer*icos(ang))/1000;
+		int x2t = cx + (inner*isin(ang))/1000;
+		int y2t = cy - (inner*icos(ang))/1000;
+		draw_line(x1t, y1t, x2t, y2t, BLACK);
+	}
+
+	{
+		int hour_ang = (hour%12)*30 + minute/2;
+		int min_ang  = minute*6;
+		int hx = cx + ((r*55/100)*isin(hour_ang))/1000;
+		int hy = cy - ((r*55/100)*icos(hour_ang))/1000;
+		int mx = cx + ((r*85/100)*isin(min_ang))/1000;
+		int my = cy - ((r*85/100)*icos(min_ang))/1000;
+
+		// Hour hand drawn with a 1px offset on two sides so it reads thicker than the minute hand
+		draw_line(cx, cy, hx, hy, BLACK);
+		draw_line(cx+1, cy, hx+1, hy, BLACK);
+		draw_line(cx, cy+1, hx, hy+1, BLACK);
+
+		draw_line(cx, cy, mx, my, BLACK);
+	}
+
+	draw_box(cx-2, cy-2, cx+2, cy+2, BLACK);
+}
+
+
+// Vertical fine-tuning for the calendar card's small (non-scaled) text: the weekday label
+// sits inside the header bar, offset down from its top edge; the year sits above the card's
+// bottom edge, offset up (hence negative).
+#define CAL_WEEKDAY_Y_BIAS   0
+#define CAL_YEAR_Y_BIAS     -22
+#define CAL_WEEKDAY_KERNING  3 // extra px between chars in "SUN"/"MON"/etc
+#define CAL_DATE_KERNING     8 // extra px between the two day-of-month digits (scale-3 font)
+#define CAL_YEAR_KERNING     5 // extra px between chars in the "MMM YYYY" line
+
+/**
+ * Draw an iOS-style calendar icon card: weekday header (inverted), big day-of-month, month+year
+ */
+static void draw_calendar_card(int x1, int y1, int x2, int y2)
+{
+	char tbuf[12];
+	int cx = (x1+x2)/2;
+	int header_h = (y2-y1)/5;
+
+	draw_rect(x1, y1, x2, y2, BLACK);
+
+	// Weekday header: filled black bar with white (inverted) text
+	draw_box(x1+1, y1+1, x2-1, y1+header_h, BLACK);
+	select_font(0); // sfont
+	draw_text_centered_kerned_bold(cx, y1+CAL_WEEKDAY_Y_BIAS, wday_str[wday], CAL_WEEKDAY_KERNING, WHITE);
+
+	// Day of month, large, letter-spaced so the two digits don't touch
+	sprintf(tbuf, "%02d", date+1);
+	select_font(2); // sfont16
+	draw_text_scaled_centered_kerned(cx, y1+header_h+4, tbuf, 3, CAL_DATE_KERNING, BLACK);
+
+	// Month (short form) + year, small, letter-spaced so it doesn't read as a solid block
+	sprintf(tbuf, "%s %04d", month_str[month], year);
+	select_font(0); // sfont
+	draw_text_centered_kerned_bold(cx, y2+CAL_YEAR_Y_BIAS, tbuf, CAL_YEAR_KERNING, BLACK);
+}
+
+
+/**
+ * Draw the clock screen: an analog clock card on the left and an iOS-style calendar
+ * card (weekday / day-of-month / year) on the right.
  *
  * @param flags display control flags
  *              bit0-1: update mode (fast/normal)
- *              bit2: whether to show the Bluetooth icon
- *
- * Displayed content includes:
- * - Battery level icon
- * - Bluetooth connection icon (optional)
- * - Large-digit time display
- * - Date and weekday (English)
+ *              bit7 (DRAW_BT): whether to show the Bluetooth icon
  */
 void clock_draw(int flags)
 {
-	char tbuf[64];
 	LAYOUT *lt = &layouts[current_layout];
+	int xres, yres;
 
 	if(ota_state){
 		return;
@@ -580,59 +672,35 @@ void clock_draw(int flags)
 	memset(fb_bw, 0xff, scr_h*line_bytes);
 	memset(fb_rr, 0x00, scr_h*line_bytes);
 
-	int cx = lt->xres/2;
+	xres = lt->xres;
+	yres = lt->yres;
 
-	// Draw the battery level
-	draw_batt(lt->x[2], lt->y[2]);
-	if(flags&DRAW_BT){
-		// Draw the Bluetooth icon
-		draw_bt(lt->x[1], lt->y[1]);
-	}
-
-	// Top, center-drawn date (DD-MM-YYYY)
-	sprintf(tbuf, "%02d-%02d-%04d", date+1, month+1, year);
-	select_font(lt->font_char);
-	draw_text_centered(cx, lt->y[0], tbuf, BLACK);
-
-	// Middle, center-drawn time (large digits)
-	select_font(lt->font_dseg);
-	if(h24_format){
-		// 24-hour format
-		sprintf(tbuf, "%02d:%02d", hour, minute);
-	}else{
-		// 12-hour format
-		int h = hour;
-		int ampm = 0;
-		if(h>=12){
-			if(h>12)
-				h -= 12;
-			ampm = 1;
-		}else if(h==0){
-			h = 12; // midnight is displayed as 12
-		}
-		sprintf(tbuf, "%2d:%02d", h, minute);
-	}
+	// Left card: analog clock face, with the battery + Bluetooth status icons
+	// tucked into its top-left corner (Bluetooth icon only while advertising)
+	// Both cards fill nearly the whole screen, split by a small gap around the midline.
 	{
-		int tw = text_width(tbuf);
-		int tx = cx - tw/2;
-		draw_text(tx, lt->y[3], tbuf, BLACK);
+		int x1 = xres*2/212,   y1 = yres*2/104;
+		int x2 = xres*102/212, y2 = yres*101/104;
+		int face_y1 = y1 + yres*10/104; // clears the icon strip above the dial
+		int cx = (x1+x2)/2, cy = (face_y1+y2)/2;
+		int r = ((x2-x1)<(y2-face_y1) ? (x2-x1) : (y2-face_y1))/2 - 0;
 
-		if(!h24_format){
-			// AM/PM immediately follows the time on its right
-			int h = hour;
-			int ampm = (h>=12);
-			select_font(lt->font_char);
-			draw_text(tx+tw+4, lt->y[7], ampm? "PM":"AM", BLACK);
+		draw_rect(x1, y1, x2, y2, BLACK);
+
+		if(flags&DRAW_BT){
+			draw_bt(x1+90, y1+1);
 		}
+		draw_batt(x1+5, y1+8);
+
+		draw_clock_face(cx, cy, r);
 	}
 
-	// Bottom, center-drawn weekday (device ID suffix appended while advertising)
-	select_font(lt->font_char);
-	if(flags&DRAW_BT){
-		sprintf(tbuf, "%s  %s", wday_str[wday], bt_id);
-		draw_text_centered(cx, lt->y[6], tbuf, BLACK);
-	}else{
-		draw_text_centered(cx, lt->y[6], wday_str[wday], BLACK);
+	// Right card: iOS-style calendar icon
+	{
+		int x1 = xres*108/212, y1 = yres*2/104;
+		int x2 = xres*209/212, y2 = yres*101/104;
+
+		draw_calendar_card(x1, y1, x2, y2);
 	}
 
 	// Update the e-paper display

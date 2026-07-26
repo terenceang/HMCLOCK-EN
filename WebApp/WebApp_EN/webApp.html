@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HM CLOCK</title>
   <script>
-    // 在首次渲染前应用已保存的主题(或系统偏好)，避免出现主题闪烁
+    // Apply the stored theme (or OS preference) before first paint to avoid a flash of the wrong theme
     (function() {
       const stored = localStorage.getItem('hmclock-theme') || 'system';
       const isDark = stored === 'dark' || (stored === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -16,7 +16,7 @@
   <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-  <!-- Tailwind 配置 -->
+  <!-- Tailwind config -->
   <script>
     tailwind.config = {
       darkMode: 'class',
@@ -38,7 +38,7 @@
       }
     }
   </script>
-  
+
   <style type="text/tailwindcss">
     @layer utilities {
       .content-auto {
@@ -55,7 +55,7 @@
       }
     }
   </style>
-  
+
   <style>
     body {
       font-family: 'Inter', sans-serif;
@@ -73,20 +73,20 @@
         radial-gradient(at 80% 0%, rgba(139, 92, 246, 0.08) 0px, transparent 50%),
         radial-gradient(at 0% 50%, rgba(16, 185, 129, 0.08) 0px, transparent 50%);
     }
-    
+
     .log-entry {
       animation: fadeIn 0.3s ease-in-out;
     }
-    
+
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(5px); }
       to { opacity: 1; transform: translateY(0); }
     }
-    
+
     .pulse {
       animation: pulse 2s infinite;
     }
-    
+
     @keyframes pulse {
       0% { transform: scale(1); }
       50% { transform: scale(1.05); }
@@ -97,41 +97,41 @@
 
 <body class="min-h-screen p-4 md:p-6 flex justify-center items-start font-inter text-dark dark:text-slate-100 transition-colors duration-300">
   <div class="w-full max-w-4xl">
-    <!-- 头部标题 -->
+    <!-- Header -->
     <header class="mb-6 text-center">
-      <h1 class="text-[clamp(1.8rem,4vw,2.5rem)] font-bold text-gradient mb-2">HM CLOCK 控制中心</h1>
+      <h1 class="text-[clamp(1.8rem,4vw,2.5rem)] font-bold text-gradient mb-2">HM CLOCK Control Center</h1>
     </header>
-    
-    <!-- 主内容卡片 -->
+
+    <!-- Main content card -->
     <div class="card-effect p-5 md:p-6 space-y-6">
-      <!-- 控制按钮区域 -->
+      <!-- Control buttons -->
       <div class="flex flex-wrap gap-3 md:gap-4">
         <button id="connect-button" class="bg-primary text-white px-5 py-2.5 rounded-lg flex items-center gap-2 btn-hover font-medium">
-          <i class="fa fa-bluetooth"></i> 连接设备
+          <i class="fa fa-bluetooth"></i> Connect Device
         </button>
         <button id="setime-button" class="bg-warning text-white px-5 py-2.5 rounded-lg flex items-center gap-2 btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
-          <i class="fa fa-clock-o"></i> 同步时间
+          <i class="fa fa-clock-o"></i> Sync Time
         </button>
         <button id="upfirm-button" class="bg-accent text-white px-5 py-2.5 rounded-lg flex items-center gap-2 btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
-          <i class="fa fa-refresh"></i> 固件升级
+          <i class="fa fa-refresh"></i> Firmware Update
         </button>
         <button id="send90-button" class="bg-secondary text-white px-5 py-2.5 rounded-lg flex items-center gap-2 btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
-          <i class="fa fa-send"></i> 切换时制
+          <i class="fa fa-send"></i> Toggle Format
         </button>
         <button id="calibration-button" class="bg-secondary text-white px-5 py-2.5 rounded-lg flex items-center gap-2 btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
-          <i class="fa fa-wrench"></i> 时间校准
+          <i class="fa fa-wrench"></i> Time Calibration
         </button>
         <button id="cardview-button" class="bg-primary text-white px-5 py-2.5 rounded-lg flex items-center gap-2 btn-hover font-medium">
-          <i class="fa fa-th-large"></i> 卡片视图
+          <i class="fa fa-th-large"></i> Card View
         </button>
         <button id="theme-button" class="bg-slate-600 text-white px-5 py-2.5 rounded-lg flex items-center gap-2 btn-hover font-medium">
-          <i class="fa fa-desktop"></i> 跟随系统
+          <i class="fa fa-desktop"></i> System
         </button>
       </div>
 
-      <!-- 时钟卡片视图: 左侧模拟时钟, 右侧仿 iOS 日历图标 -->
+      <!-- Clock card view: analog clock on the left, iOS-style calendar icon on the right -->
       <div id="clock-card-view" class="flex flex-wrap items-stretch justify-center gap-4 p-4 bg-gray-50 dark:bg-slate-900/60 rounded-lg border border-gray-100 dark:border-slate-700">
-        <!-- 模拟时钟卡片 -->
+        <!-- Analog clock card -->
         <div class="card-effect flex items-center justify-center p-4" style="width:160px;">
           <svg viewBox="0 0 200 200" width="140" height="140">
             <circle cx="100" cy="100" r="94" class="fill-white dark:fill-slate-800 stroke-slate-800 dark:stroke-slate-200" stroke-width="4"/>
@@ -156,9 +156,9 @@
           </svg>
         </div>
 
-        <!-- 仿 iOS 日历图标卡片: 显示 年份/日期/星期 -->
+        <!-- iOS-style calendar icon card: shows year / date / weekday -->
         <div class="card-effect overflow-hidden flex flex-col" style="width:140px;">
-          <div class="bg-danger text-white text-center text-sm font-bold py-1.5" id="cal-weekday">周日</div>
+          <div class="bg-danger text-white text-center text-sm font-bold py-1.5" id="cal-weekday">Sun</div>
           <div class="flex-1 flex flex-col items-center justify-center py-4">
             <div class="text-5xl font-bold text-dark dark:text-slate-100 leading-none" id="cal-date">--</div>
             <div class="text-xs text-gray-500 dark:text-slate-400 mt-2" id="cal-year">----</div>
@@ -166,15 +166,15 @@
         </div>
       </div>
 
-      <!-- 设备信息区域 -->
+      <!-- Device info -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 dark:bg-slate-900/60 rounded-lg border border-gray-100 dark:border-slate-700">
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
             <i class="fa fa-microchip"></i>
           </div>
           <div>
-            <p class="text-gray-500 dark:text-slate-400 text-sm">设备名称</p>
-            <p id="device_name" class="font-semibold">未连接</p>
+            <p class="text-gray-500 dark:text-slate-400 text-sm">Device Name</p>
+            <p id="device_name" class="font-semibold">Not Connected</p>
           </div>
         </div>
 
@@ -183,7 +183,7 @@
             <i class="fa fa-bolt"></i>
           </div>
           <div>
-            <p class="text-gray-500 dark:text-slate-400 text-sm">当前电压</p>
+            <p class="text-gray-500 dark:text-slate-400 text-sm">Current Voltage</p>
             <p id="current_voltage" class="font-semibold">--.- V</p>
           </div>
         </div>
@@ -193,7 +193,7 @@
             <i class="fa fa-calendar"></i>
           </div>
           <div>
-            <p class="text-gray-500 dark:text-slate-400 text-sm">设备时间</p>
+            <p class="text-gray-500 dark:text-slate-400 text-sm">Device Time</p>
             <p id="current_time" class="font-semibold">--:--:--</p>
           </div>
         </div>
@@ -203,15 +203,15 @@
             <i class="fa fa-laptop"></i>
           </div>
           <div>
-            <p class="text-gray-500 dark:text-slate-400 text-sm">系统时间</p>
-            <p id="system_time" class="font-semibold">加载中...</p>
+            <p class="text-gray-500 dark:text-slate-400 text-sm">System Time</p>
+            <p id="system_time" class="font-semibold">Loading...</p>
           </div>
         </div>
       </div>
 
-      <!-- 进度条区域 -->
+      <!-- Progress bar -->
       <div id="progress-container" class="hidden">
-        <p class="text-sm font-medium text-gray-600 dark:text-slate-300 mb-1">固件升级进度</p>
+        <p class="text-sm font-medium text-gray-600 dark:text-slate-300 mb-1">Firmware Update Progress</p>
         <div class="h-2 bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden">
           <div id="update_progress_bar" class="h-full bg-gradient-to-r from-primary to-accent w-0 transition-all duration-300"></div>
         </div>
@@ -219,39 +219,39 @@
         <div id="update_progress" class="hidden"></div>
       </div>
 
-      <!-- 日志终端区域 -->
+      <!-- Log terminal -->
       <div class="space-y-2">
         <div class="flex justify-between items-center">
           <h3 class="font-semibold text-gray-700 dark:text-slate-300 flex items-center gap-2">
-            <i class="fa fa-terminal text-primary"></i> 设备日志
+            <i class="fa fa-terminal text-primary"></i> Device Log
           </h3>
           <button id="clear-log-btn" class="text-xs text-gray-500 dark:text-slate-400 hover:text-danger transition-colors">
-            <i class="fa fa-trash-o"></i> 清空日志
+            <i class="fa fa-trash-o"></i> Clear Log
           </button>
         </div>
 
         <div id="log-window" class="bg-gray-900 text-gray-100 text-xs md:text-sm rounded-lg h-48 md:h-64 overflow-y-auto p-3 font-mono">
-          <div class="text-gray-400 log-entry">终端已启动，等待设备连接...</div>
+          <div class="text-gray-400 log-entry">Terminal started, waiting for device connection...</div>
         </div>
       </div>
     </div>
 
-    <!-- 页脚信息 -->
+    <!-- Footer -->
     <footer class="mt-6 text-center text-xs text-gray-500 dark:text-slate-400">
-      <p>HM CLOCK蓝牙控制工具 &copy; https://github.com/tpunix/HMCLOCK</p>
+      <p>HM CLOCK Bluetooth Control Tool &copy; https://github.com/tpunix/HMCLOCK</p>
     </footer>
   </div>
 
   <script src="https://cdn.sheetjs.com/crc-32-latest/package/crc32.js"></script>
-  
+
   <script>
-    // 主题切换(浅色/深色/跟随系统)
+    // Theme (light / dark / system)
     const themeButton = document.getElementById('theme-button');
     const themeOrder = ['system', 'light', 'dark'];
     const themeMeta = {
-      system: { icon: 'fa-desktop', label: '跟随系统' },
-      light:  { icon: 'fa-sun-o',   label: '浅色' },
-      dark:   { icon: 'fa-moon-o',  label: '深色' }
+      system: { icon: 'fa-desktop', label: 'System' },
+      light:  { icon: 'fa-sun-o',   label: 'Light' },
+      dark:   { icon: 'fa-moon-o',  label: 'Dark' }
     };
     let currentTheme = localStorage.getItem('hmclock-theme') || 'system';
 
@@ -270,14 +270,14 @@
       applyTheme(currentTheme);
     });
 
-    // 跟随系统模式下，实时响应操作系统主题变化
+    // Live-follow the OS theme while in "system" mode
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
       if (currentTheme === 'system') applyTheme('system');
     });
 
-    // 时钟卡片视图: 左侧模拟时钟表盘, 右侧仿 iOS 日历图标(年/日期/星期)
-    // 需在 updateSystemTime() 之前声明，因为该函数首次(立即)执行时就会调用 renderClockCard()
-    const wdayShort = ['日', '一', '二', '三', '四', '五', '六'];
+    // Clock card view: analog dial on the left, iOS-style calendar icon on the right (year/date/weekday)
+    // Declared before updateSystemTime() since it calls renderClockCard() on its very first (immediate) run.
+    const wdayShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const cardView = document.getElementById('clock-card-view');
     const cardviewButton = document.getElementById('cardview-button');
     let cardViewOn = true;
@@ -292,7 +292,7 @@
       }
     });
 
-    // 依据 deviceTimeBase 与已流逝的秒数，计算设备当前时间(用于卡片视图)
+    // Derive the device's current time from deviceTimeBase and elapsed seconds (used by the card view)
     function deviceCurrentTime() {
       const { year, month, mday, hour, minute, second, timestamp } = deviceTimeBase;
       const elapsedSeconds = Math.floor((new Date() - timestamp) / 1000);
@@ -314,54 +314,54 @@
       document.getElementById('minute-hand').setAttribute('transform', `rotate(${minDeg} 100 100)`);
       document.getElementById('hour-hand').setAttribute('transform', `rotate(${hourDeg} 100 100)`);
 
-      document.getElementById('cal-weekday').textContent = '周' + wdayShort[date.getDay()];
+      document.getElementById('cal-weekday').textContent = wdayShort[date.getDay()];
       document.getElementById('cal-date').textContent = date.getDate().toString().padStart(2, '0');
       document.getElementById('cal-year').textContent = date.getFullYear();
     }
 
-    // 系统时间更新
+    // System time update
     function updateSystemTime() {
       const now = new Date();
-      const timeString = now.toLocaleTimeString('zh-CN', {
+      const timeString = now.toLocaleTimeString('en-US', {
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit'
       });
-      const dateString = now.toLocaleDateString('zh-CN', {
+      const dateString = now.toLocaleDateString('en-US', {
         year: 'numeric',
         month: '2-digit',
         day: '2-digit'
       });
       document.getElementById('system_time').textContent = `${dateString} ${timeString}`;
 
-      // 未连接设备时，卡片视图以系统时间驱动
+      // Drive the card view from system time when no device is connected
       if (!deviceTimeBase) {
         renderClockCard(now);
       }
     }
 
-    // 初始化更新系统时间并设置定时器
+    // Start updating system time immediately and on an interval
     updateSystemTime();
     setInterval(updateSystemTime, 1000);
-    
-    // 日志系统
+
+    // Log system
     const logWindow = document.getElementById('log-window');
     const clearLogBtn = document.getElementById('clear-log-btn');
-    
-    // 自定义日志函数
+
+    // Custom log function
     function log(message, type = 'info') {
-      const timestamp = new Date().toLocaleTimeString('zh-CN', {
+      const timestamp = new Date().toLocaleTimeString('en-US', {
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit'
       });
-      
+
       const logLine = document.createElement('div');
       logLine.className = 'log-entry mb-1 border-b border-gray-800 pb-1';
-      
+
       let typeIcon = '';
       let typeColor = '';
-      
+
       switch(type) {
         case 'success':
           typeIcon = '<span class="text-green-400 mr-1"><i class="fa fa-check-circle"></i></span>';
@@ -380,61 +380,61 @@
           typeIcon = '<span class="text-blue-400 mr-1"><i class="fa fa-info-circle"></i></span>';
           typeColor = 'text-gray-300';
       }
-      
+
       logLine.innerHTML = `<span class="text-gray-500 mr-2">[${timestamp}]</span>${typeIcon}<span class="${typeColor}">${message}</span>`;
       logWindow.appendChild(logLine);
       logWindow.scrollTop = logWindow.scrollHeight;
     }
-    
-    // 替换console.log
+
+    // Wrap console.log
     const originalLog = console.log;
     console.log = function (...args) {
       originalLog(...args);
       log(args.join(" "));
     };
-    
-    // 清空日志
+
+    // Clear log
     clearLogBtn.addEventListener('click', () => {
-      logWindow.innerHTML = '<div class="text-gray-400 log-entry">日志已清空</div>';
+      logWindow.innerHTML = '<div class="text-gray-400 log-entry">Log cleared</div>';
     });
 
-    // 核心功能代码
+    // Core functionality
     var connected = false;
     var device = null;
     var longValue = null;
-    var deviceTimeInterval = null; // 设备时间更新定时器
-    var deviceTimeBase = null;     // 设备时间基准值
-    
-    // 格式化时间显示
+    var deviceTimeInterval = null; // device time update timer
+    var deviceTimeBase = null;     // device time baseline
+
+    // Format time for display
     function formatTime(year, month, mday, hour, min, sec) {
       month += 1;
       return `${year}-${month.toString().padStart(2, '0')}-${mday.toString().padStart(2, '0')} ${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
     }
-    
-    // 更新设备时间显示
+
+    // Update device time display
     function updateDeviceTime() {
       if (!deviceTimeBase) return;
-      
-      // 获取基准时间
+
+      // Get the baseline time
       let { year, month, mday, hour, minute, second } = deviceTimeBase;
-      
-      // 计算从基准时间开始经过的秒数
+
+      // Compute elapsed seconds since the baseline
       const now = new Date();
       const elapsedSeconds = Math.floor((now - deviceTimeBase.timestamp) / 1000);
-      
-      // 更新时间
+
+      // Advance the time
       let totalSeconds = second + elapsedSeconds;
       second = totalSeconds % 60;
       let totalMinutes = minute + Math.floor(totalSeconds / 60);
       minute = totalMinutes % 60;
       let totalHours = hour + Math.floor(totalMinutes / 60);
       hour = totalHours % 24;
-      // 此处忽略天数变化，因为设备时间通常不会长时间运行
-      
-      // 更新显示
+      // Day rollover is ignored here since the device connection is not expected to run for long
+
+      // Update the display
       document.getElementById('current_time').textContent = formatTime(year, month, mday, hour, minute, second);
 
-      // 已连接设备时，卡片视图以设备时间驱动
+      // Drive the card view from device time when a device is connected
       renderClockCard(new Date(year, month, mday, hour, minute, second));
     }
 
@@ -443,25 +443,25 @@
       else connectToDevice();
     }
 
-    // 连接设备
+    // Connect device
     async function connectToDevice() {
       try {
-        // 更新按钮状态
+        // Update button state
         const connectButton = document.getElementById('connect-button');
         connectButton.disabled = true;
-        connectButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> 连接中...';
-        
-        console.log('请求设备...');
+        connectButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Connecting...';
+
+        console.log('Requesting device...');
         device = await navigator.bluetooth.requestDevice({
           filters: [{ namePrefix: "DCLK" }],
           optionalServices: [ 0xff00 ]
         });
-        console.log('设备名称:', device.name);
+        console.log('Device name:', device.name);
         document.getElementById('device_name').textContent = device.name;
         device.ongattserverdisconnected = onDisconnect;
 
         let server = await device.gatt.connect();
-        console.log('设备已连接');
+        console.log('Device connected');
 
         let service = await server.getPrimaryService(0xff00);
         let ctrlPoint = await service.getCharacteristic(0xff03);
@@ -469,7 +469,7 @@
         longValue = await service.getCharacteristic(0xff01);
 
         let cur_voltage = await adc1Value.readValue();
-        console.log('当前电压:', cur_voltage.getUint16(0, true) / 1000 + 'V');
+        console.log('Current voltage:', cur_voltage.getUint16(0, true) / 1000 + 'V');
         document.getElementById('current_voltage').textContent = (cur_voltage.getUint16(0, true) / 1000).toFixed(2) + ' V';
 
         let cur_time = await longValue.readValue();
@@ -479,17 +479,17 @@
             hour = cur_time.getUint8(4),
             minute = cur_time.getUint8(5),
             second = cur_time.getUint8(6);
-        
-        // 保存设备时间基准值和当前时间戳
+
+        // Save the device time baseline and current timestamp
         deviceTimeBase = {
           year, month, mday, hour, minute, second,
           timestamp: new Date()
         };
-        
-        // 立即更新设备时间显示
+
+        // Update the device time display immediately
         updateDeviceTime();
-        
-        // 设置定时器每秒更新一次设备时间
+
+        // Start a timer to update device time every second
         if (deviceTimeInterval) clearInterval(deviceTimeInterval);
         deviceTimeInterval = setInterval(updateDeviceTime, 1000);
 
@@ -508,23 +508,23 @@
         document.getElementById('upfirm-button').classList.remove('opacity-50', 'cursor-not-allowed');
         document.getElementById('send90-button').classList.remove('opacity-50', 'cursor-not-allowed');
         document.getElementById('calibration-button').classList.remove('opacity-50', 'cursor-not-allowed');
-        
-        connectButton.innerHTML = '<i class="fa fa-disconnect"></i> 断开连接';
+
+        connectButton.innerHTML = '<i class="fa fa-disconnect"></i> Disconnect';
         connectButton.disabled = false;
       } catch (error) {
-        console.log('连接失败:', error);
+        console.log('Connection failed:', error);
         disconnect();
       }
     }
 
-    // 对时功能
+    // Time sync
     async function onSetTime() {
       const setimeButton = document.getElementById('setime-button');
       setimeButton.disabled = true;
-      setimeButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> 同步中...';
-      
+      setimeButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Syncing...';
+
       try {
-        // 等待整秒时间
+        // Wait for an exact second boundary
         while(true){
           const tm_ms = Date.now();
           if((tm_ms%1000)==0)
@@ -544,25 +544,25 @@
         buf.set([0x91, year % 256, Math.floor(year / 256), month, mday, hour, minute, second, wday]);
         await longValue.writeValue(buf);
 
-        // 更新设备时间基准值
+        // Update the device time baseline
         deviceTimeBase = {
           year, month: month, mday, hour, minute, second,
           timestamp: new Date()
         };
-        
-        // 立即更新设备时间显示
+
+        // Update the device time display immediately
         updateDeviceTime();
-        
-        console.log('同步时间成功!');
+
+        console.log('Time sync succeeded!');
       } catch (error) {
-        console.log('同步时间失败:', error);
+        console.log('Time sync failed:', error);
       } finally {
-        setimeButton.innerHTML = '<i class="fa fa-clock-o"></i> 同步时间';
+        setimeButton.innerHTML = '<i class="fa fa-clock-o"></i> Sync Time';
         setimeButton.disabled = false;
       }
     }
 
-    // 文件读取辅助函数
+    // File reading helper
     function readFileAsArrayBuffer(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -572,7 +572,7 @@
       });
     }
 
-    // 固件标识查找
+    // Firmware signature search
     function find_patten(target, patten) {
       for (let i = 0; i <= target.length - patten.length; i++) {
         let match = true;
@@ -586,37 +586,37 @@
       }
       return -1;
     }
-    
-    // 发送命令
+
+    // Send command
     async function onSend90() {
       const send90Button = document.getElementById('send90-button');
       send90Button.disabled = true;
-      send90Button.innerHTML = '<i class="fa fa-spinner fa-spin"></i> 发送中...';
-      
+      send90Button.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Sending...';
+
       try {
-        let buf = new Uint8Array([0x90]);  // 构造单字节命令
+        let buf = new Uint8Array([0x90]);  // Build single-byte command
         await longValue.writeValue(buf);
-        console.log('已发送切换命令');
+        console.log('Toggle command sent');
       } catch (err) {
-        console.log('发送失败:', err);
+        console.log('Send failed:', err);
       } finally {
-        send90Button.innerHTML = '<i class="fa fa-send"></i> 发送命令';
+        send90Button.innerHTML = '<i class="fa fa-send"></i> Send Command';
         send90Button.disabled = false;
       }
     }
-    
-    // 固件升级
+
+    // Firmware update
     async function onUpdate() {
       const upfirmButton = document.getElementById('upfirm-button');
       upfirmButton.disabled = true;
-      upfirmButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> 升级中...';
-      
+      upfirmButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Updating...';
+
       document.getElementById('progress-container').classList.remove('hidden');
-      
+
       let firm_buf, firm_size;
 
       try {
-        console.log('准备打开文件');
+        console.log('Opening file picker');
         const [handle] = await window.showOpenFilePicker({
           types: [{ description: 'Firm files', accept: { 'text/plain': ['.bin'] } }]
         });
@@ -625,8 +625,8 @@
         firm_buf = new Uint8Array(abuf);
         firm_size = file.size;
       } catch (err) {
-        console.log('文件读取失败:', err);
-        upfirmButton.innerHTML = '<i class="fa fa-refresh"></i> 固件升级';
+        console.log('File read failed:', err);
+        upfirmButton.innerHTML = '<i class="fa fa-refresh"></i> Firmware Update';
         upfirmButton.disabled = false;
         document.getElementById('progress-container').classList.add('hidden');
         return;
@@ -635,8 +635,8 @@
       let firm_magic = new Uint8Array([0x79, 0x13, 0xa5, 0xf9, 0x86, 0xec, 0x5a, 0x06]);
       let pos = find_patten(firm_buf, firm_magic);
       if (pos == -1) {
-        console.log('无效固件: 未找到版本号!');
-        upfirmButton.innerHTML = '<i class="fa fa-refresh"></i> 固件升级';
+        console.log('Invalid firmware: version marker not found!');
+        upfirmButton.innerHTML = '<i class="fa fa-refresh"></i> Firmware Update';
         upfirmButton.disabled = false;
         document.getElementById('progress-container').classList.add('hidden');
         return;
@@ -644,7 +644,7 @@
 
       let firm_ver = firm_buf[pos + 9] * 256 + firm_buf[pos + 8];
       let firm_crc = CRC32.buf(firm_buf);
-      console.log('固件版本:', firm_ver, '大小:', firm_size, 'CRC:', (firm_crc >>> 0).toString(16));
+      console.log('Firmware version:', firm_ver, 'size:', firm_size, 'CRC:', (firm_crc >>> 0).toString(16));
 
       let buf = new Uint8Array(136);
       let view = new DataView(buf.buffer);
@@ -656,7 +656,7 @@
       const totalSize = firm_size + 64;
       const progressBar = document.getElementById('update_progress_bar');
       const progressText = document.getElementById('update_progress_text');
-      
+
       try {
         for (let i = 0; i < totalSize; i += 256) {
           buf.fill(0xff);
@@ -681,21 +681,21 @@
           await longValue.writeValue(buf);
           sent += 128;
 
-          // 更新进度条
+          // Update progress bar
           const progress = Math.min(Math.round(100 * sent / totalSize), 100);
           progressBar.style.width = `${progress}%`;
           progressText.textContent = `${progress}%`;
-          document.getElementById('update_progress').textContent = `升级进度: ${progress}%`;
+          document.getElementById('update_progress').textContent = `Update progress: ${progress}%`;
         }
 
         buf[0] = 0xa4;
         buf.fill(0, 1, 4);
         await longValue.writeValue(buf);
-        console.log('升级完成');
+        console.log('Update complete');
       } catch (error) {
-        console.log('升级结束，蓝牙已断开');
+        console.log('Update ended, Bluetooth disconnected');
       } finally {
-        upfirmButton.innerHTML = '<i class="fa fa-refresh"></i> 固件升级';
+        upfirmButton.innerHTML = '<i class="fa fa-refresh"></i> Firmware Update';
         upfirmButton.disabled = false;
         document.getElementById('progress-container').classList.add('hidden');
       }
@@ -709,9 +709,9 @@
 		cur_time = await longValue.readValue();
 		last_minute = cur_time.getUint8(5);
 		cal_minute = cur_time.getInt32(7, true);
-		console.log('对时后'+cal_minute+'分钟');
+		console.log(cal_minute+' minutes since last sync');
 
-        console.log('等待分钟跳变......');
+        console.log('Waiting for the minute to roll over......');
         while(true) {
           cur_time = await longValue.readValue();
           minute = cur_time.getUint8(5);
@@ -724,13 +724,13 @@
         var today = new Date();
         var sys_minute = today.getMinutes();
         var sys_second = today.getSeconds();
-        console.log('设备时间: '+minute+'分'+second+'秒');
-        console.log('系统时间: '+sys_minute+'分'+sys_second+'秒');
+        console.log('Device time: '+minute+'m'+second+'s');
+        console.log('System time: '+sys_minute+'m'+sys_second+'s');
 
 		if(cal_minute==-1){
-			console.log('请先对时!');
+			console.log('Please sync time first!');
 		}else if(cal_minute<2880){
-			console.log('对时与校准间隔太短(小于两天)!');
+			console.log('Interval between sync and calibration is too short (less than two days)!');
 		}else{
 
 			if(minute>sys_minute){
@@ -742,7 +742,7 @@
 			}
 
 			var diff = (minute*60+second)-(sys_minute*60+sys_second);
-			console.log('时间差: '+diff+'秒');
+			console.log('Time difference: '+diff+'s');
 
 			var buf = new Uint8Array(4);
 			buf[0] = 0x92;
@@ -751,27 +751,27 @@
 			buf[3] = 0x00;
 			await longValue.writeValue(buf);
 
-			console.log('校准完成');
+			console.log('Calibration complete');
 		}
 		document.getElementById('calibration-button').disabled = false;
 	}
 
-    // 断开连接
+    // Disconnect
     function disconnect() {
       const connectButton = document.getElementById('connect-button');
       connectButton.disabled = true;
-      connectButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> 断开中...';
-      
+      connectButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Disconnecting...';
+
       document.getElementById('setime-button').disabled = true;
       document.getElementById('send90-button').disabled = true;
       document.getElementById('upfirm-button').disabled = true;
-      document.getElementById('calibration-button').disabled = true; 
+      document.getElementById('calibration-button').disabled = true;
       document.getElementById('setime-button').classList.add('opacity-50', 'cursor-not-allowed');
       document.getElementById('upfirm-button').classList.add('opacity-50', 'cursor-not-allowed');
       document.getElementById('send90-button').classList.add('opacity-50', 'cursor-not-allowed');
       document.getElementById('calibration-button').classList.add('opacity-50', 'cursor-not-allowed');
 
-      // 清除设备时间更新定时器
+      // Clear the device time update timer
       if (deviceTimeInterval) {
         clearInterval(deviceTimeInterval);
         deviceTimeInterval = null;
@@ -784,23 +784,23 @@
       onDisconnect();
     }
 
-    // 断开回调
+    // Disconnect callback
     function onDisconnect() {
       device = null;
       connected = false;
-      
-      document.getElementById('device_name').textContent = "未连接";
+
+      document.getElementById('device_name').textContent = "Not Connected";
       document.getElementById('current_voltage').textContent = "--.- V";
       document.getElementById('current_time').textContent = "--:--:--";
 
       const connectButton = document.getElementById('connect-button');
-      connectButton.innerHTML = '<i class="fa fa-bluetooth"></i> 连接设备';
+      connectButton.innerHTML = '<i class="fa fa-bluetooth"></i> Connect Device';
       connectButton.disabled = false;
-      
-      console.log('设备已断开连接');
+
+      console.log('Device disconnected');
     }
 
-    // 事件绑定
+    // Event bindings
     document.getElementById('connect-button').addEventListener('click', onClick);
     document.getElementById('setime-button').addEventListener('click', onSetTime);
     document.getElementById('upfirm-button').addEventListener('click', onUpdate);
