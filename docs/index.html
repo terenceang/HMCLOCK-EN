@@ -106,7 +106,8 @@
     <div class="card-effect p-5 md:p-6 space-y-6">
       <!-- Control buttons -->
       <div class="flex flex-wrap gap-3 md:gap-4">
-        <button id="connect-button" class="bg-primary text-white px-5 py-2.5 rounded-lg flex items-center gap-2 btn-hover font-medium">
+        <!-- Starts disabled; enabled only once a Bluetooth adapter is confirmed present -->
+        <button id="connect-button" class="bg-primary text-white px-5 py-2.5 rounded-lg flex items-center gap-2 btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
           <i class="fa fa-bluetooth"></i> Connect Device
         </button>
         <button id="setime-button" class="bg-warning text-white px-5 py-2.5 rounded-lg flex items-center gap-2 btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
@@ -128,6 +129,9 @@
           <i class="fa fa-desktop"></i> System
         </button>
       </div>
+
+      <!-- Bluetooth availability / connection error banner -->
+      <div id="bt-status" class="hidden"></div>
 
       <!-- Clock card view: analog clock on the left, iOS-style calendar icon on the right -->
       <div id="clock-card-view" class="flex flex-wrap items-stretch justify-center gap-4 p-4 bg-gray-50 dark:bg-slate-900/60 rounded-lg border border-gray-100 dark:border-slate-700">
@@ -398,6 +402,63 @@
       logWindow.innerHTML = '<div class="text-gray-400 log-entry">Log cleared</div>';
     });
 
+    // Whether this machine has a usable Bluetooth radio. Starts false so the
+    // Connect button cannot be clicked before the availability check resolves.
+    let bluetoothAvailable = false;
+
+    // Status banner
+    const btStatus = document.getElementById('bt-status');
+
+    function showStatus(message, type = 'error') {
+      const palette = {
+        error:   'bg-red-50 dark:bg-red-900/30 border-red-300 dark:border-red-700 text-red-800 dark:text-red-200',
+        warning: 'bg-yellow-50 dark:bg-yellow-900/30 border-yellow-300 dark:border-yellow-700 text-yellow-800 dark:text-yellow-200'
+      };
+      const icon = type === 'warning' ? 'fa-exclamation-triangle' : 'fa-exclamation-circle';
+      btStatus.className = 'rounded-lg border px-4 py-3 text-sm flex items-start gap-3 ' + palette[type];
+      btStatus.innerHTML = `<i class="fa ${icon} mt-0.5"></i><div>${message}</div>`;
+    }
+
+    function hideStatus() {
+      btStatus.className = 'hidden';
+      btStatus.innerHTML = '';
+    }
+
+    // Enable/disable the Connect button and keep its styling in sync
+    function setConnectEnabled(enabled) {
+      const connectButton = document.getElementById('connect-button');
+      connectButton.disabled = !enabled;
+      connectButton.classList.toggle('opacity-50', !enabled);
+      connectButton.classList.toggle('cursor-not-allowed', !enabled);
+    }
+
+    // Messages explaining what the user can actually do about each failure
+    const NO_ADAPTER_MSG = 'No Bluetooth adapter found on this computer. Plug in a Bluetooth 4.0+ (BLE) USB adapter, or open this page on a device with built-in Bluetooth.';
+    const UNSUPPORTED_MSG = 'This browser does not support Web Bluetooth. Use Chrome, Edge or Opera on desktop, or Chrome on Android. Firefox, Safari and all iPhone/iPad browsers cannot connect.';
+
+    // Turn a Web Bluetooth failure into something the user can act on
+    function describeError(error) {
+      const name = error && error.name;
+      const message = (error && error.message) || String(error);
+
+      if (!navigator.bluetooth) return UNSUPPORTED_MSG;
+      // Chrome reports a missing radio as NotFoundError, same as an empty picker
+      if (name === 'NotFoundError' && /adapter/i.test(message)) return NO_ADAPTER_MSG;
+      if (name === 'NotFoundError') {
+        return 'No device was selected. The picker only lists clocks advertising a name starting with "DCLK" — check that the clock is powered on, advertising, and not already connected to another phone or computer.';
+      }
+      if (name === 'SecurityError') {
+        return 'Blocked by the browser. Web Bluetooth needs a secure page (https:// or localhost); opening this file directly from disk will not work.';
+      }
+      if (name === 'NetworkError') {
+        return 'Lost the connection to the clock. Move closer to it, power-cycle it, then try again.';
+      }
+      if (name === 'NotSupportedError') {
+        return 'The clock did not expose the expected service (0xff00). It may be running incompatible firmware.';
+      }
+      return `${name || 'Error'}: ${message}`;
+    }
+
     // Core functionality
     var connected = false;
     var device = null;
@@ -439,8 +500,14 @@
     }
 
     function onClick() {
-      if(connected) disconnect();
-      else connectToDevice();
+      if(connected) { disconnect(); return; }
+      // Belt and braces: never attempt a connection without a radio
+      if(!bluetoothAvailable) {
+        showStatus(navigator.bluetooth ? NO_ADAPTER_MSG : UNSUPPORTED_MSG);
+        setConnectEnabled(false);
+        return;
+      }
+      connectToDevice();
     }
 
     // Connect device
@@ -452,6 +519,7 @@
         connectButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Connecting...';
 
         console.log('Requesting device...');
+        hideStatus();
         device = await navigator.bluetooth.requestDevice({
           filters: [{ namePrefix: "DCLK" }],
           optionalServices: [ 0xff00 ]
@@ -513,7 +581,10 @@
         connectButton.disabled = false;
       } catch (error) {
         console.log('Connection failed:', error);
+        // disconnect() first, so the specific reason below wins over any
+        // generic banner onDisconnect() may set
         disconnect();
+        showStatus(describeError(error));
       }
     }
 
@@ -795,10 +866,63 @@
 
       const connectButton = document.getElementById('connect-button');
       connectButton.innerHTML = '<i class="fa fa-bluetooth"></i> Connect Device';
-      connectButton.disabled = false;
+      // Only offer Connect again if there is still a radio to connect with
+      setConnectEnabled(bluetoothAvailable);
+      if (!bluetoothAvailable) showStatus(NO_ADAPTER_MSG);
 
       console.log('Device disconnected');
     }
+
+    // Check up front whether Bluetooth can work at all, so Connect does not fail
+    // with an unexplained error the moment it is clicked
+    async function checkBluetoothAvailability() {
+      if (!navigator.bluetooth) {
+        showStatus(UNSUPPORTED_MSG);
+        setConnectEnabled(false);
+        console.log('Web Bluetooth is not supported by this browser');
+        return;
+      }
+
+      let available;
+      try {
+        available = await navigator.bluetooth.getAvailability();
+      } catch (error) {
+        // Older browsers may not implement getAvailability. Fail open rather than
+        // leaving the button stuck disabled, and let the click report the error.
+        console.log('Bluetooth availability check failed:', error);
+        bluetoothAvailable = true;
+        setConnectEnabled(true);
+        return;
+      }
+
+      bluetoothAvailable = available;
+      if (available) {
+        hideStatus();
+      } else {
+        showStatus(NO_ADAPTER_MSG);
+        console.log('No Bluetooth adapter available');
+      }
+      setConnectEnabled(available);
+    }
+
+    // Re-check if an adapter is plugged in or removed while the page is open
+    if (navigator.bluetooth && navigator.bluetooth.addEventListener) {
+      navigator.bluetooth.addEventListener('availabilitychanged', (event) => {
+        // Always record the new state, even mid-session: if the adapter is pulled
+        // while connected, onDisconnect() reads this to keep Connect disabled.
+        bluetoothAvailable = event.value;
+        console.log(event.value ? 'Bluetooth adapter detected' : 'Bluetooth adapter removed');
+
+        // Leave the button alone while connected; it is the Disconnect control
+        if (connected) return;
+
+        if (event.value) hideStatus();
+        else showStatus(NO_ADAPTER_MSG);
+        setConnectEnabled(event.value);
+      });
+    }
+
+    checkBluetoothAvailability();
 
     // Event bindings
     document.getElementById('connect-button').addEventListener('click', onClick);
