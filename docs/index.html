@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HM CLOCK</title>
+  <script>
+    // Apply the stored theme (or OS preference) before first paint to avoid a flash of the wrong theme
+    (function() {
+      const stored = localStorage.getItem('hmclock-theme') || 'system';
+      const isDark = stored === 'dark' || (stored === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.classList.toggle('dark', isDark);
+    })();
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Tailwind config -->
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            primary: '#3B82F6',
+            secondary: '#10B981',
+            accent: '#8B5CF6',
+            warning: '#F59E0B',
+            danger: '#EF4444',
+            dark: '#1E293B',
+            light: '#F8FAFC'
+          },
+          fontFamily: {
+            inter: ['Inter', 'sans-serif'],
+          },
+        },
+      }
+    }
+  </script>
+
+  <style type="text/tailwindcss">
+    @layer utilities {
+      .content-auto {
+        content-visibility: auto;
+      }
+      .btn-hover {
+        @apply transition-all duration-300 hover:shadow-lg transform hover:-translate-y-0.5;
+      }
+      .card-effect {
+        @apply bg-white dark:bg-slate-800 rounded-xl shadow-md hover:shadow-lg dark:shadow-black/40 transition-all duration-300;
+      }
+      .text-gradient {
+        @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent;
+      }
+    }
+  </style>
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f0f9ff;
+      background-image:
+        radial-gradient(at 40% 20%, rgba(59, 130, 246, 0.05) 0px, transparent 50%),
+        radial-gradient(at 80% 0%, rgba(139, 92, 246, 0.05) 0px, transparent 50%),
+        radial-gradient(at 0% 50%, rgba(16, 185, 129, 0.05) 0px, transparent 50%);
+    }
+
+    .dark body {
+      background-color: #0f172a;
+      background-image:
+        radial-gradient(at 40% 20%, rgba(59, 130, 246, 0.08) 0px, transparent 50%),
+        radial-gradient(at 80% 0%, rgba(139, 92, 246, 0.08) 0px, transparent 50%),
+        radial-gradient(at 0% 50%, rgba(16, 185, 129, 0.08) 0px, transparent 50%);
+    }
+
+    .log-entry {
+      animation: fadeIn 0.3s ease-in-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(5px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .pulse {
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+      100% { transform: scale(1); }
+    }
+  </style>
+</head>
+
+<body class="min-h-screen p-4 md:p-6 flex justify-center items-start font-inter text-dark dark:text-slate-100 transition-colors duration-300">
+  <div class="w-full max-w-4xl">
+    <!-- Header -->
+    <header class="mb-6 text-center">
+      <h1 class="text-[clamp(1.8rem,4vw,2.5rem)] font-bold text-gradient mb-2">HM CLOCK Control Center</h1>
+    </header>
+
+    <!-- Main content card -->
+    <div class="card-effect p-5 md:p-6 space-y-6">
+      <!-- Control buttons -->
+      <div class="flex flex-wrap gap-3 md:gap-4">
+        <button id="connect-button" class="bg-primary text-white px-5 py-2.5 rounded-lg flex items-center gap-2 btn-hover font-medium">
+          <i class="fa fa-bluetooth"></i> Connect Device
+        </button>
+        <button id="setime-button" class="bg-warning text-white px-5 py-2.5 rounded-lg flex items-center gap-2 btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
+          <i class="fa fa-clock-o"></i> Sync Time
+        </button>
+        <button id="upfirm-button" class="bg-accent text-white px-5 py-2.5 rounded-lg flex items-center gap-2 btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
+          <i class="fa fa-refresh"></i> Firmware Update
+        </button>
+        <button id="send90-button" class="bg-secondary text-white px-5 py-2.5 rounded-lg flex items-center gap-2 btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
+          <i class="fa fa-send"></i> Toggle Format
+        </button>
+        <button id="calibration-button" class="bg-secondary text-white px-5 py-2.5 rounded-lg flex items-center gap-2 btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
+          <i class="fa fa-wrench"></i> Time Calibration
+        </button>
+        <button id="cardview-button" class="bg-primary text-white px-5 py-2.5 rounded-lg flex items-center gap-2 btn-hover font-medium">
+          <i class="fa fa-th-large"></i> Card View
+        </button>
+        <button id="theme-button" class="bg-slate-600 text-white px-5 py-2.5 rounded-lg flex items-center gap-2 btn-hover font-medium">
+          <i class="fa fa-desktop"></i> System
+        </button>
+      </div>
+
+      <!-- Clock card view: analog clock on the left, iOS-style calendar icon on the right -->
+      <div id="clock-card-view" class="flex flex-wrap items-stretch justify-center gap-4 p-4 bg-gray-50 dark:bg-slate-900/60 rounded-lg border border-gray-100 dark:border-slate-700">
+        <!-- Analog clock card -->
+        <div class="card-effect flex items-center justify-center p-4" style="width:160px;">
+          <svg viewBox="0 0 200 200" width="140" height="140">
+            <circle cx="100" cy="100" r="94" class="fill-white dark:fill-slate-800 stroke-slate-800 dark:stroke-slate-200" stroke-width="4"/>
+            <g class="stroke-slate-800 dark:stroke-slate-200" stroke-linecap="round">
+              <line x1="100" y1="10" x2="100" y2="24" stroke-width="4" transform="rotate(0 100 100)"/>
+              <line x1="100" y1="10" x2="100" y2="24" stroke-width="4" transform="rotate(90 100 100)"/>
+              <line x1="100" y1="10" x2="100" y2="24" stroke-width="4" transform="rotate(180 100 100)"/>
+              <line x1="100" y1="10" x2="100" y2="24" stroke-width="4" transform="rotate(270 100 100)"/>
+              <line x1="100" y1="10" x2="100" y2="20" stroke-width="2" transform="rotate(30 100 100)"/>
+              <line x1="100" y1="10" x2="100" y2="20" stroke-width="2" transform="rotate(60 100 100)"/>
+              <line x1="100" y1="10" x2="100" y2="20" stroke-width="2" transform="rotate(120 100 100)"/>
+              <line x1="100" y1="10" x2="100" y2="20" stroke-width="2" transform="rotate(150 100 100)"/>
+              <line x1="100" y1="10" x2="100" y2="20" stroke-width="2" transform="rotate(210 100 100)"/>
+              <line x1="100" y1="10" x2="100" y2="20" stroke-width="2" transform="rotate(240 100 100)"/>
+              <line x1="100" y1="10" x2="100" y2="20" stroke-width="2" transform="rotate(300 100 100)"/>
+              <line x1="100" y1="10" x2="100" y2="20" stroke-width="2" transform="rotate(330 100 100)"/>
+            </g>
+            <line id="hour-hand" x1="100" y1="100" x2="100" y2="58" class="stroke-slate-800 dark:stroke-slate-200" stroke-width="7" stroke-linecap="round"/>
+            <line id="minute-hand" x1="100" y1="100" x2="100" y2="34" class="stroke-slate-800 dark:stroke-slate-200" stroke-width="5" stroke-linecap="round"/>
+            <line id="second-hand" x1="100" y1="100" x2="100" y2="22" class="stroke-red-500 dark:stroke-red-400" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="100" cy="100" r="6" class="fill-slate-800 dark:fill-slate-200"/>
+          </svg>
+        </div>
+
+        <!-- iOS-style calendar icon card: shows year / date / weekday -->
+        <div class="card-effect overflow-hidden flex flex-col" style="width:140px;">
+          <div class="bg-danger text-white text-center text-sm font-bold py-1.5" id="cal-weekday">Sun</div>
+          <div class="flex-1 flex flex-col items-center justify-center py-4">
+            <div class="text-5xl font-bold text-dark dark:text-slate-100 leading-none" id="cal-date">--</div>
+            <div class="text-xs text-gray-500 dark:text-slate-400 mt-2" id="cal-year">----</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Device info -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 dark:bg-slate-900/60 rounded-lg border border-gray-100 dark:border-slate-700">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+            <i class="fa fa-microchip"></i>
+          </div>
+          <div>
+            <p class="text-gray-500 dark:text-slate-400 text-sm">Device Name</p>
+            <p id="device_name" class="font-semibold">Not Connected</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-warning/10 flex items-center justify-center text-warning">
+            <i class="fa fa-bolt"></i>
+          </div>
+          <div>
+            <p class="text-gray-500 dark:text-slate-400 text-sm">Current Voltage</p>
+            <p id="current_voltage" class="font-semibold">--.- V</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-secondary/10 flex items-center justify-center text-secondary">
+            <i class="fa fa-calendar"></i>
+          </div>
+          <div>
+            <p class="text-gray-500 dark:text-slate-400 text-sm">Device Time</p>
+            <p id="current_time" class="font-semibold">--:--:--</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-accent/10 flex items-center justify-center text-accent">
+            <i class="fa fa-laptop"></i>
+          </div>
+          <div>
+            <p class="text-gray-500 dark:text-slate-400 text-sm">System Time</p>
+            <p id="system_time" class="font-semibold">Loading...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Progress bar -->
+      <div id="progress-container" class="hidden">
+        <p class="text-sm font-medium text-gray-600 dark:text-slate-300 mb-1">Firmware Update Progress</p>
+        <div class="h-2 bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden">
+          <div id="update_progress_bar" class="h-full bg-gradient-to-r from-primary to-accent w-0 transition-all duration-300"></div>
+        </div>
+        <p id="update_progress_text" class="text-xs text-gray-500 dark:text-slate-400 mt-1">0%</p>
+        <div id="update_progress" class="hidden"></div>
+      </div>
+
+      <!-- Log terminal -->
+      <div class="space-y-2">
+        <div class="flex justify-between items-center">
+          <h3 class="font-semibold text-gray-700 dark:text-slate-300 flex items-center gap-2">
+            <i class="fa fa-terminal text-primary"></i> Device Log
+          </h3>
+          <button id="clear-log-btn" class="text-xs text-gray-500 dark:text-slate-400 hover:text-danger transition-colors">
+            <i class="fa fa-trash-o"></i> Clear Log
+          </button>
+        </div>
+
+        <div id="log-window" class="bg-gray-900 text-gray-100 text-xs md:text-sm rounded-lg h-48 md:h-64 overflow-y-auto p-3 font-mono">
+          <div class="text-gray-400 log-entry">Terminal started, waiting for device connection...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="mt-6 text-center text-xs text-gray-500 dark:text-slate-400">
+      <p>HM CLOCK Bluetooth Control Tool &copy; https://github.com/tpunix/HMCLOCK</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.sheetjs.com/crc-32-latest/package/crc32.js"></script>
+
+  <script>
+    // Theme (light / dark / system)
+    const themeButton = document.getElementById('theme-button');
+    const themeOrder = ['system', 'light', 'dark'];
+    const themeMeta = {
+      system: { icon: 'fa-desktop', label: 'System' },
+      light:  { icon: 'fa-sun-o',   label: 'Light' },
+      dark:   { icon: 'fa-moon-o',  label: 'Dark' }
+    };
+    let currentTheme = localStorage.getItem('hmclock-theme') || 'system';
+
+    function applyTheme(mode) {
+      const isDark = mode === 'dark' || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.classList.toggle('dark', isDark);
+      const meta = themeMeta[mode];
+      themeButton.innerHTML = `<i class="fa ${meta.icon}"></i> ${meta.label}`;
+    }
+
+    applyTheme(currentTheme);
+
+    themeButton.addEventListener('click', () => {
+      currentTheme = themeOrder[(themeOrder.indexOf(currentTheme) + 1) % themeOrder.length];
+      localStorage.setItem('hmclock-theme', currentTheme);
+      applyTheme(currentTheme);
+    });
+
+    // Live-follow the OS theme while in "system" mode
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+      if (currentTheme === 'system') applyTheme('system');
+    });
+
+    // Clock card view: analog dial on the left, iOS-style calendar icon on the right (year/date/weekday)
+    // Declared before updateSystemTime() since it calls renderClockCard() on its very first (immediate) run.
+    const wdayShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const cardView = document.getElementById('clock-card-view');
+    const cardviewButton = document.getElementById('cardview-button');
+    let cardViewOn = true;
+
+    cardviewButton.addEventListener('click', () => {
+      cardViewOn = !cardViewOn;
+      cardView.classList.toggle('hidden', !cardViewOn);
+      cardviewButton.classList.toggle('bg-dark', !cardViewOn);
+      cardviewButton.classList.toggle('bg-primary', cardViewOn);
+      if (cardViewOn) {
+        renderClockCard(deviceTimeBase ? deviceCurrentTime() : new Date());
+      }
+    });
+
+    // Derive the device's current time from deviceTimeBase and elapsed seconds (used by the card view)
+    function deviceCurrentTime() {
+      const { year, month, mday, hour, minute, second, timestamp } = deviceTimeBase;
+      const elapsedSeconds = Math.floor((new Date() - timestamp) / 1000);
+      return new Date(year, month, mday, hour, minute, second + elapsedSeconds);
+    }
+
+    function renderClockCard(date) {
+      if (!cardViewOn) return;
+
+      const hour = date.getHours();
+      const minute = date.getMinutes();
+      const second = date.getSeconds();
+
+      const secDeg = second * 6;
+      const minDeg = minute * 6 + second * 0.1;
+      const hourDeg = (hour % 12) * 30 + minute * 0.5;
+
+      document.getElementById('second-hand').setAttribute('transform', `rotate(${secDeg} 100 100)`);
+      document.getElementById('minute-hand').setAttribute('transform', `rotate(${minDeg} 100 100)`);
+      document.getElementById('hour-hand').setAttribute('transform', `rotate(${hourDeg} 100 100)`);
+
+      document.getElementById('cal-weekday').textContent = wdayShort[date.getDay()];
+      document.getElementById('cal-date').textContent = date.getDate().toString().padStart(2, '0');
+      document.getElementById('cal-year').textContent = date.getFullYear();
+    }
+
+    // System time update
+    function updateSystemTime() {
+      const now = new Date();
+      const timeString = now.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+      const dateString = now.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      });
+      document.getElementById('system_time').textContent = `${dateString} ${timeString}`;
+
+      // Drive the card view from system time when no device is connected
+      if (!deviceTimeBase) {
+        renderClockCard(now);
+      }
+    }
+
+    // Start updating system time immediately and on an interval
+    updateSystemTime();
+    setInterval(updateSystemTime, 1000);
+
+    // Log system
+    const logWindow = document.getElementById('log-window');
+    const clearLogBtn = document.getElementById('clear-log-btn');
+
+    // Custom log function
+    function log(message, type = 'info') {
+      const timestamp = new Date().toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+
+      const logLine = document.createElement('div');
+      logLine.className = 'log-entry mb-1 border-b border-gray-800 pb-1';
+
+      let typeIcon = '';
+      let typeColor = '';
+
+      switch(type) {
+        case 'success':
+          typeIcon = '<span class="text-green-400 mr-1"><i class="fa fa-check-circle"></i></span>';
+          typeColor = 'text-green-300';
+          break;
+        case 'error':
+          typeIcon = '<span class="text-red-400 mr-1"><i class="fa fa-exclamation-circle"></i></span>';
+          typeColor = 'text-red-300';
+          break;
+        case 'warning':
+          typeIcon = '<span class="text-yellow-400 mr-1"><i class="fa fa-exclamation-triangle"></i></span>';
+          typeColor = 'text-yellow-300';
+          break;
+        case 'info':
+        default:
+          typeIcon = '<span class="text-blue-400 mr-1"><i class="fa fa-info-circle"></i></span>';
+          typeColor = 'text-gray-300';
+      }
+
+      logLine.innerHTML = `<span class="text-gray-500 mr-2">[${timestamp}]</span>${typeIcon}<span class="${typeColor}">${message}</span>`;
+      logWindow.appendChild(logLine);
+      logWindow.scrollTop = logWindow.scrollHeight;
+    }
+
+    // Wrap console.log
+    const originalLog = console.log;
+    console.log = function (...args) {
+      originalLog(...args);
+      log(args.join(" "));
+    };
+
+    // Clear log
+    clearLogBtn.addEventListener('click', () => {
+      logWindow.innerHTML = '<div class="text-gray-400 log-entry">Log cleared</div>';
+    });
+
+    // Core functionality
+    var connected = false;
+    var device = null;
+    var longValue = null;
+    var deviceTimeInterval = null; // device time update timer
+    var deviceTimeBase = null;     // device time baseline
+
+    // Format time for display
+    function formatTime(year, month, mday, hour, min, sec) {
+      month += 1;
+      return `${year}-${month.toString().padStart(2, '0')}-${mday.toString().padStart(2, '0')} ${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+    }
+
+    // Update device time display
+    function updateDeviceTime() {
+      if (!deviceTimeBase) return;
+
+      // Get the baseline time
+      let { year, month, mday, hour, minute, second } = deviceTimeBase;
+
+      // Compute elapsed seconds since the baseline
+      const now = new Date();
+      const elapsedSeconds = Math.floor((now - deviceTimeBase.timestamp) / 1000);
+
+      // Advance the time
+      let totalSeconds = second + elapsedSeconds;
+      second = totalSeconds % 60;
+      let totalMinutes = minute + Math.floor(totalSeconds / 60);
+      minute = totalMinutes % 60;
+      let totalHours = hour + Math.floor(totalMinutes / 60);
+      hour = totalHours % 24;
+      // Day rollover is ignored here since the device connection is not expected to run for long
+
+      // Update the display
+      document.getElementById('current_time').textContent = formatTime(year, month, mday, hour, minute, second);
+
+      // Drive the card view from device time when a device is connected
+      renderClockCard(new Date(year, month, mday, hour, minute, second));
+    }
+
+    function onClick() {
+      if(connected) disconnect();
+      else connectToDevice();
+    }
+
+    // Connect device
+    async function connectToDevice() {
+      try {
+        // Update button state
+        const connectButton = document.getElementById('connect-button');
+        connectButton.disabled = true;
+        connectButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Connecting...';
+
+        console.log('Requesting device...');
+        device = await navigator.bluetooth.requestDevice({
+          filters: [{ namePrefix: "DCLK" }],
+          optionalServices: [ 0xff00 ]
+        });
+        console.log('Device name:', device.name);
+        document.getElementById('device_name').textContent = device.name;
+        device.ongattserverdisconnected = onDisconnect;
+
+        let server = await device.gatt.connect();
+        console.log('Device connected');
+
+        let service = await server.getPrimaryService(0xff00);
+        let ctrlPoint = await service.getCharacteristic(0xff03);
+        let adc1Value = await service.getCharacteristic(0xff02);
+        longValue = await service.getCharacteristic(0xff01);
+
+        let cur_voltage = await adc1Value.readValue();
+        console.log('Current voltage:', cur_voltage.getUint16(0, true) / 1000 + 'V');
+        document.getElementById('current_voltage').textContent = (cur_voltage.getUint16(0, true) / 1000).toFixed(2) + ' V';
+
+        let cur_time = await longValue.readValue();
+        let year = cur_time.getUint16(0, true),
+            month = cur_time.getUint8(2),
+            mday = cur_time.getUint8(3),
+            hour = cur_time.getUint8(4),
+            minute = cur_time.getUint8(5),
+            second = cur_time.getUint8(6);
+
+        // Save the device time baseline and current timestamp
+        deviceTimeBase = {
+          year, month, mday, hour, minute, second,
+          timestamp: new Date()
+        };
+
+        // Update the device time display immediately
+        updateDeviceTime();
+
+        // Start a timer to update device time every second
+        if (deviceTimeInterval) clearInterval(deviceTimeInterval);
+        deviceTimeInterval = setInterval(updateDeviceTime, 1000);
+
+        let now = new Date();
+        document.getElementById('system_time').textContent = formatTime(
+          now.getFullYear(), now.getMonth(), now.getDate(),
+          now.getHours(), now.getMinutes(), now.getSeconds()
+        );
+
+        connected = true;
+        document.getElementById('setime-button').disabled = false;
+        document.getElementById('upfirm-button').disabled = false;
+        document.getElementById('send90-button').disabled = false;
+        document.getElementById('calibration-button').disabled = false;
+        document.getElementById('setime-button').classList.remove('opacity-50', 'cursor-not-allowed');
+        document.getElementById('upfirm-button').classList.remove('opacity-50', 'cursor-not-allowed');
+        document.getElementById('send90-button').classList.remove('opacity-50', 'cursor-not-allowed');
+        document.getElementById('calibration-button').classList.remove('opacity-50', 'cursor-not-allowed');
+
+        connectButton.innerHTML = '<i class="fa fa-disconnect"></i> Disconnect';
+        connectButton.disabled = false;
+      } catch (error) {
+        console.log('Connection failed:', error);
+        disconnect();
+      }
+    }
+
+    // Time sync
+    async function onSetTime() {
+      const setimeButton = document.getElementById('setime-button');
+      setimeButton.disabled = true;
+      setimeButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Syncing...';
+
+      try {
+        // Wait for an exact second boundary
+        while(true){
+          const tm_ms = Date.now();
+          if((tm_ms%1000)==0)
+            break;
+		}
+
+        let now = new Date();
+        let year = now.getFullYear(),
+            month = now.getMonth(),
+            mday = now.getDate(),
+            wday = now.getDay(),
+            hour = now.getHours(),
+            minute = now.getMinutes(),
+            second = now.getSeconds();
+
+        let buf = new Uint8Array(9);
+        buf.set([0x91, year % 256, Math.floor(year / 256), month, mday, hour, minute, second, wday]);
+        await longValue.writeValue(buf);
+
+        // Update the device time baseline
+        deviceTimeBase = {
+          year, month: month, mday, hour, minute, second,
+          timestamp: new Date()
+        };
+
+        // Update the device time display immediately
+        updateDeviceTime();
+
+        console.log('Time sync succeeded!');
+      } catch (error) {
+        console.log('Time sync failed:', error);
+      } finally {
+        setimeButton.innerHTML = '<i class="fa fa-clock-o"></i> Sync Time';
+        setimeButton.disabled = false;
+      }
+    }
+
+    // File reading helper
+    function readFileAsArrayBuffer(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(file);
+      });
+    }
+
+    // Firmware signature search
+    function find_patten(target, patten) {
+      for (let i = 0; i <= target.length - patten.length; i++) {
+        let match = true;
+        for (let j = 0; j < patten.length; j++) {
+          if (target[i + j] !== patten[j]) {
+            match = false;
+            break;
+          }
+        }
+        if (match) return i;
+      }
+      return -1;
+    }
+
+    // Send command
+    async function onSend90() {
+      const send90Button = document.getElementById('send90-button');
+      send90Button.disabled = true;
+      send90Button.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Sending...';
+
+      try {
+        let buf = new Uint8Array([0x90]);  // Build single-byte command
+        await longValue.writeValue(buf);
+        console.log('Toggle command sent');
+      } catch (err) {
+        console.log('Send failed:', err);
+      } finally {
+        send90Button.innerHTML = '<i class="fa fa-send"></i> Send Command';
+        send90Button.disabled = false;
+      }
+    }
+
+    // Firmware update
+    async function onUpdate() {
+      const upfirmButton = document.getElementById('upfirm-button');
+      upfirmButton.disabled = true;
+      upfirmButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Updating...';
+
+      document.getElementById('progress-container').classList.remove('hidden');
+
+      let firm_buf, firm_size;
+
+      try {
+        console.log('Opening file picker');
+        const [handle] = await window.showOpenFilePicker({
+          types: [{ description: 'Firm files', accept: { 'text/plain': ['.bin'] } }]
+        });
+        const file = await handle.getFile();
+        let abuf = await readFileAsArrayBuffer(file);
+        firm_buf = new Uint8Array(abuf);
+        firm_size = file.size;
+      } catch (err) {
+        console.log('File read failed:', err);
+        upfirmButton.innerHTML = '<i class="fa fa-refresh"></i> Firmware Update';
+        upfirmButton.disabled = false;
+        document.getElementById('progress-container').classList.add('hidden');
+        return;
+      }
+
+      let firm_magic = new Uint8Array([0x79, 0x13, 0xa5, 0xf9, 0x86, 0xec, 0x5a, 0x06]);
+      let pos = find_patten(firm_buf, firm_magic);
+      if (pos == -1) {
+        console.log('Invalid firmware: version marker not found!');
+        upfirmButton.innerHTML = '<i class="fa fa-refresh"></i> Firmware Update';
+        upfirmButton.disabled = false;
+        document.getElementById('progress-container').classList.add('hidden');
+        return;
+      }
+
+      let firm_ver = firm_buf[pos + 9] * 256 + firm_buf[pos + 8];
+      let firm_crc = CRC32.buf(firm_buf);
+      console.log('Firmware version:', firm_ver, 'size:', firm_size, 'CRC:', (firm_crc >>> 0).toString(16));
+
+      let buf = new Uint8Array(136);
+      let view = new DataView(buf.buffer);
+      buf[0] = 0xa0;
+      view.setUint16(2, firm_size, true);
+      await longValue.writeValue(buf);
+
+      let sent = 0;
+      const totalSize = firm_size + 64;
+      const progressBar = document.getElementById('update_progress_bar');
+      const progressText = document.getElementById('update_progress_text');
+
+      try {
+        for (let i = 0; i < totalSize; i += 256) {
+          buf.fill(0xff);
+          if (i === 0) {
+            view.setUint32(8, 0x00aa5170, true);
+            view.setUint32(12, firm_size, true);
+            view.setUint32(16, firm_crc, true);
+            view.setUint32(36, 0xa50f0000 + firm_ver, true);
+            buf[40] = 0;
+            buf[0] = 0xa2;
+            buf.set(firm_buf.slice(sent, sent + 64), 72);
+            await longValue.writeValue(buf);
+            sent += 64;
+          } else {
+            buf[0] = 0xa2;
+            buf.set(firm_buf.slice(sent, sent + 128), 8);
+            await longValue.writeValue(buf);
+            sent += 128;
+          }
+          buf[0] = 0xa3;
+          buf.set(firm_buf.slice(sent, sent + 128), 8);
+          await longValue.writeValue(buf);
+          sent += 128;
+
+          // Update progress bar
+          const progress = Math.min(Math.round(100 * sent / totalSize), 100);
+          progressBar.style.width = `${progress}%`;
+          progressText.textContent = `${progress}%`;
+          document.getElementById('update_progress').textContent = `Update progress: ${progress}%`;
+        }
+
+        buf[0] = 0xa4;
+        buf.fill(0, 1, 4);
+        await longValue.writeValue(buf);
+        console.log('Update complete');
+      } catch (error) {
+        console.log('Update ended, Bluetooth disconnected');
+      } finally {
+        upfirmButton.innerHTML = '<i class="fa fa-refresh"></i> Firmware Update';
+        upfirmButton.disabled = false;
+        document.getElementById('progress-container').classList.add('hidden');
+      }
+    }
+
+	async function onCalibration() {
+		document.getElementById('calibration-button').disabled = true;
+
+		var minute, second, last_minute, cal_minute;
+
+		cur_time = await longValue.readValue();
+		last_minute = cur_time.getUint8(5);
+		cal_minute = cur_time.getInt32(7, true);
+		console.log(cal_minute+' minutes since last sync');
+
+        console.log('Waiting for the minute to roll over......');
+        while(true) {
+          cur_time = await longValue.readValue();
+          minute = cur_time.getUint8(5);
+            if(minute != last_minute)
+              break;
+                last_minute = minute;
+        }
+        second = cur_time.getUint8(6);
+
+        var today = new Date();
+        var sys_minute = today.getMinutes();
+        var sys_second = today.getSeconds();
+        console.log('Device time: '+minute+'m'+second+'s');
+        console.log('System time: '+sys_minute+'m'+sys_second+'s');
+
+		if(cal_minute==-1){
+			console.log('Please sync time first!');
+		}else if(cal_minute<2880){
+			console.log('Interval between sync and calibration is too short (less than two days)!');
+		}else{
+
+			if(minute>sys_minute){
+				if(minute-sys_minute>50)
+					sys_minute += 60;
+			}else{
+				if(sys_minute-minute>50)
+					minute += 60;
+			}
+
+			var diff = (minute*60+second)-(sys_minute*60+sys_second);
+			console.log('Time difference: '+diff+'s');
+
+			var buf = new Uint8Array(4);
+			buf[0] = 0x92;
+			buf[1] = diff%256;
+			buf[2] = diff/256;
+			buf[3] = 0x00;
+			await longValue.writeValue(buf);
+
+			console.log('Calibration complete');
+		}
+		document.getElementById('calibration-button').disabled = false;
+	}
+
+    // Disconnect
+    function disconnect() {
+      const connectButton = document.getElementById('connect-button');
+      connectButton.disabled = true;
+      connectButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Disconnecting...';
+
+      document.getElementById('setime-button').disabled = true;
+      document.getElementById('send90-button').disabled = true;
+      document.getElementById('upfirm-button').disabled = true;
+      document.getElementById('calibration-button').disabled = true;
+      document.getElementById('setime-button').classList.add('opacity-50', 'cursor-not-allowed');
+      document.getElementById('upfirm-button').classList.add('opacity-50', 'cursor-not-allowed');
+      document.getElementById('send90-button').classList.add('opacity-50', 'cursor-not-allowed');
+      document.getElementById('calibration-button').classList.add('opacity-50', 'cursor-not-allowed');
+
+      // Clear the device time update timer
+      if (deviceTimeInterval) {
+        clearInterval(deviceTimeInterval);
+        deviceTimeInterval = null;
+      }
+      deviceTimeBase = null;
+
+      if (device && device.gatt.connected) {
+        device.gatt.disconnect();
+      }
+      onDisconnect();
+    }
+
+    // Disconnect callback
+    function onDisconnect() {
+      device = null;
+      connected = false;
+
+      document.getElementById('device_name').textContent = "Not Connected";
+      document.getElementById('current_voltage').textContent = "--.- V";
+      document.getElementById('current_time').textContent = "--:--:--";
+
+      const connectButton = document.getElementById('connect-button');
+      connectButton.innerHTML = '<i class="fa fa-bluetooth"></i> Connect Device';
+      connectButton.disabled = false;
+
+      console.log('Device disconnected');
+    }
+
+    // Event bindings
+    document.getElementById('connect-button').addEventListener('click', onClick);
+    document.getElementById('setime-button').addEventListener('click', onSetTime);
+    document.getElementById('upfirm-button').addEventListener('click', onUpdate);
+    document.getElementById('send90-button').addEventListener('click', onSend90);
+    document.getElementById('calibration-button').addEventListener('click', onCalibration);
+  </script>
+</body>
+</html>
