@@ -287,7 +287,9 @@ static void app_clock_timer_cb(void)
     if(cal_minute<0){
         if(stat>=2){
             user_app_adv_start();
-            QR_draw();
+            // Full refresh on the hour (stat>=3) to clear any ghosting from the
+            // repeated fast BT-icon toggles; fast update otherwise.
+            QR_draw(stat>=3 ? UPDATE_FULL : UPDATE_FAST);
         }
         return;
     }
@@ -373,7 +375,7 @@ void user_app_on_db_init_complete( void )
 	// reflects the just-started advertising/BT state)
 	//clock_draw(DRAW_BT|UPDATE_FULL);
 	user_app_adv_start();
-	QR_draw();
+	QR_draw(UPDATE_FULL);
 
 	// Start the clock timer, aligned to the minute boundary
 	app_clock_timer_restart();
@@ -474,7 +476,7 @@ void user_app_adv_undirect_complete(uint8_t status)
 		adv_state = 0;
 		// Not yet synced -- show the pairing QR code
     if(cal_minute<0){
-        QR_draw();
+        QR_draw(UPDATE_FLY);
     }
 		else
 		clock_draw(UPDATE_FLY);
@@ -512,7 +514,7 @@ void user_app_disconnect(struct gapc_disconnect_ind const *param)
 	}else{
 		    // Not yet synced -- show the pairing QR code
     if(cal_minute<0){
-        QR_draw();
+        QR_draw(UPDATE_FLY);
     }
 		else
 		clock_draw(UPDATE_FLY);

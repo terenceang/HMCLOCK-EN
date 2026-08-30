@@ -477,34 +477,35 @@ static void epd_wait_timer(void)
 }
 
 
-void QR_draw()
+void QR_draw(int mode)
 {
 	char tbuf[16];
 
 	// QR code drawing logic goes here
 	epd_hw_open();
 
-	epd_update_mode(UPDATE_FULL);
+	epd_update_mode(mode);
 
 	memset(fb_bw, 0xff, scr_h*line_bytes);
 	memset(fb_rr, 0x00, scr_h*line_bytes);
 
 	draw_qr_code(5, 5, 3, QR_31x31);
-	draw_text(100, 5,"Bluetooth", BLACK);
+	// Text column center: QR code occupies x=5..97, leaving x=98..211 for text.
+	const int col_cx = 155;
+	draw_text_centered(col_cx, 5, "Bluetooth", BLACK);
 	if(adv_state){
 		// Bluetooth icon, shown only while advertising -- mirrors clock_draw()'s DRAW_BT icon
 		draw_bt(195, 8);
 	}
-	// Draw the device name as a single contiguous string (DCLK-XXYYZZ) in one
-	// call, rather than splitting it across two draw_text calls at fixed x
-	// positions, which produced a visual gap.
 	sprintf(tbuf, "DCLK-%s", bt_id);
-	draw_text(100, 20, tbuf, BLACK);
+	draw_text_centered(col_cx, 26, tbuf, BLACK);
 
-	draw_text(110,40,"-------------",BLACK);
+	draw_text_centered(col_cx, 47, "-------------", BLACK);
 
-	draw_text(100, 60, "Scan the QR code", BLACK);
-	draw_text(100, 75, "with your browser", BLACK);
+	draw_text_centered(col_cx, 68, "Scan to Pair", BLACK);
+
+	sprintf(tbuf, "v%08x", EPD_VERSION);
+	draw_text_centered(col_cx, 90, tbuf, BLACK);
 	// Update the e-paper display
 	epd_init();
 	epd_screen_update();
@@ -773,7 +774,7 @@ void user_svc1_long_val_wr_ind_handler(ke_msg_id_t const msgid,
 		h24_format = !h24_format;
 		if(cal_minute<0){
 			// Not yet synced -- keep showing the pairing QR code
-			QR_draw();
+			QR_draw(UPDATE_FAST);
 		}else{
 			clock_draw(DRAW_BT|UPDATE_FAST);
 		}
