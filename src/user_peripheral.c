@@ -66,8 +66,8 @@ static int first_update_seconds = 0;           // Seconds to advance by on the f
 // EPD version info (volatile ensures it isn't optimized away; used for version detection)
 const volatile u32 epd_version[3] = {0xF9A51379, ~0xF9A51379, EPD_VERSION};
 
-extern int year,month; // Current time variables
 extern int second; // Current seconds value, used to compute the remaining time to the next minute boundary
+extern int cal_minute; // Minutes since the last time sync; -1 means the clock has never been synced
 
 /*
  * FUNCTION DEFINITIONS
@@ -281,11 +281,14 @@ static void app_clock_timer_cb(void)
 		clock_push();
 	}
 
-    // Not yet configured -- always show the pairing QR code
-    if(year==2025 && month<=5){
-        // Placeholder gate for "not configured yet"
-        QR_draw();
-        user_app_adv_start(); // Keep advertising continuously
+    // Not yet synced -- show the pairing QR code instead of the clock face,
+    // following the same 30s-advertise/10-min-cycle cadence as the synced clock
+    // (stat>=2: 10-minute boundary, hour change, or day change).
+    if(cal_minute<0){
+        if(stat>=2){
+            user_app_adv_start();
+            QR_draw();
+        }
         return;
     }
 
@@ -366,10 +369,11 @@ void user_app_on_db_init_complete( void )
 	clock_print();
 	clock_push();
 
-	// Draw the clock (with Bluetooth icon + full update) and start advertising
+	// Start advertising, then draw the pairing screen (draw after start so it
+	// reflects the just-started advertising/BT state)
 	//clock_draw(DRAW_BT|UPDATE_FULL);
-	QR_draw();
 	user_app_adv_start();
+	QR_draw();
 
 	// Start the clock timer, aligned to the minute boundary
 	app_clock_timer_restart();
@@ -468,9 +472,8 @@ void user_app_adv_undirect_complete(uint8_t status)
 	// state and refresh the screen
 	if(status!=0){
 		adv_state = 0;
-		// Not yet configured -- always show the pairing QR code
-    if(year==2025 && month<=5){
-        // Placeholder gate for "not configured yet"
+		// Not yet synced -- show the pairing QR code
+    if(cal_minute<0){
         QR_draw();
     }
 		else
@@ -507,9 +510,8 @@ void user_app_disconnect(struct gapc_disconnect_ind const *param)
 	if(param->reason!=CO_ERROR_REMOTE_USER_TERM_CON){
 		user_app_adv_start();
 	}else{
-		    // Not yet configured -- always show the pairing QR code
-    if(year==2025 && month<=5){
-        // Placeholder gate for "not configured yet"
+		    // Not yet synced -- show the pairing QR code
+    if(cal_minute<0){
         QR_draw();
     }
 		else

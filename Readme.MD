@@ -20,6 +20,12 @@ This project utilizes discarded **Hema Electronic Shelf Label (ESL)** hardware f
 
 ## Changelog
 
+### 0xA50f000d
+
+* Fixed a broken placeholder check (`year==2025 && month<=5`, always false) that let the clock face display before the time had ever been synced; the "not yet configured" state is now driven by whether a `clock_set` write has ever been received.
+* The pairing/QR screen now shows the Bluetooth icon while advertising, matching the clock face's existing behavior.
+* Pairing-mode advertising now follows the same 30-second-burst-every-10-minutes cadence as the synced clock, instead of restarting on every 1-minute tick.
+
 ### 0xA50f000c
 
 * Redesigned the clock screen: an analog clock face card on the left, an iOS-style calendar icon card on the right (weekday header, big day-of-month, month + year), both sized to fill nearly the whole screen.
@@ -45,7 +51,7 @@ This project utilizes discarded **Hema Electronic Shelf Label (ESL)** hardware f
 * Removed the lunar calendar / solar-term / traditional-holiday feature entirely (lunar date tables, solar-term calculation, holiday table, and their on-screen display).
 * Converted the on-screen date to English (ISO `YYYY-MM-DD` plus a 3-letter weekday, e.g. `2026-07-18  Sat`) and AM/PM to `AM`/`PM`.
 * Renamed the BLE device from `DLG-CLOCK-XXYYZZ` to `DCLK-XXYYZZ`.
-* Regenerated the pairing-screen QR code to point at a temporary LAN address.
+* Regenerated the pairing-screen QR code to point at the permanent hosted web app: `https://terenceang.github.io/HMCLOCK-EN/`.
 * `clock_set` (BLE `0x91`) no longer reads/validates the lunar-date bytes; the minimum accepted write length dropped from 12 to 9 bytes. The web app no longer computes or sends them.
 
 ### 0xA50f0008
