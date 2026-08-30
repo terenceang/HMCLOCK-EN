@@ -688,7 +688,7 @@ void clock_draw(int flags)
 		draw_rect(x1, y1, x2, y2, BLACK);
 
 		if(flags&DRAW_BT){
-			draw_bt(x1+90, y1+1);
+			draw_bt(x1+105, y1+1);
 		}
 		draw_batt(x1+5, y1+8);
 
