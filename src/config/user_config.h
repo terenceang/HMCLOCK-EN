@@ -55,7 +55,7 @@
  ****************************************************************************************
  */
 
-#define EPD_VERSION 0xA50f000d
+#define EPD_VERSION 0xA50f000e
 
 
 /*
@@ -310,8 +310,12 @@ static const struct connection_param_configuration user_connection_param_conf = 
     /// use the macro MS_TO_DOUBLESLOTS to convert from milliseconds (ms) to double slots
     .intv_max = MS_TO_DOUBLESLOTS(20),
 
-    /// Latency measured in connection events
-    .latency = 0,
+    /// Latency measured in connection events. This app's traffic (clock push,
+    /// occasional writes) is infrequent, so skip most empty connection events
+    /// instead of waking the radio every 10-20ms while connected. Supervision
+    /// timeout (2500ms) has ample headroom for this: (1+latency)*intv_max*2
+    /// = 5*20*2 = 200ms, well under the spec-required 2500ms.
+    .latency = 4,
 
     /// Supervision timeout measured in timer units (10 ms)
     /// use the macro MS_TO_TIMERUNITS to convert from milliseconds (ms) to timer units
@@ -343,7 +347,10 @@ static const struct default_handlers_configuration  user_default_hnd_conf = {
     // Configure the advertise period in case of DEF_ADV_WITH_TIMEOUT.
     // It is measured in timer units (3 min). Use MS_TO_TIMERUNITS macro to convert
     // from milliseconds (ms) to timer units.
-    .advertise_period = MS_TO_TIMERUNITS(30000),
+    // Fires once every ~10-minute clock cycle (app_clock_timer_cb, user_peripheral.c) --
+    // 15s is still a generous connect window (real connects complete in 1-3s once
+    // initiated) at roughly half the previous radio-on duty cycle (30s->15s per burst).
+    .advertise_period = MS_TO_TIMERUNITS(15000),
 
     // Configure the security start operation of the default handlers
     // if the security is enabled (CFG_APP_SECURITY)

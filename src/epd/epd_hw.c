@@ -93,7 +93,9 @@ void epd_hw_init(u32 config0, u32 config1, int w, int h, int mode)
 void epd_hw_open(void)
 {
 	gpio_config(epio_pwr , 0x0300, 0);
-	gpio_config(epio_busy, 0x0000, 1);
+	// nBUSY is active-low (idle/deasserted = high); pull up so the input
+	// doesn't float while the panel (and its output driver) is powered off.
+	gpio_config(epio_busy, 0x0100, 1);
 	gpio_config(epio_rst , 0x0300, 0);
 	gpio_config(epio_dc  , 0x0300, 0);
 	gpio_config(epio_cs  , 0x0300, 1);
@@ -104,7 +106,7 @@ void epd_hw_open(void)
 void epd_hw_close(void)
 {
 	gpio_config(epio_pwr , 0x0300, 0);
-	gpio_config(epio_busy, 0x0000, 0);
+	gpio_config(epio_busy, 0x0100, 0);
 	gpio_config(epio_rst , 0x0300, 0);
 	gpio_config(epio_dc  , 0x0300, 0);
 	gpio_config(epio_cs  , 0x0300, 0);
@@ -148,7 +150,12 @@ void epd_reset(int val)
 
 void epd_wait(void)
 {
-	while(EPD_BUSY());
+	// Boot-only detection path -- bounded so a missing/faulty panel (BUSY
+	// pin stuck high) fails past this instead of hanging boot forever.
+	int timeout;
+	for(timeout=1000; timeout>0 && EPD_BUSY(); timeout--){
+		delay_ms(1);
+	}
 }
 
 
@@ -189,7 +196,7 @@ void epd_cmd1(int cmd, int d0)
 	epd_spi_write(cmd);
 	EPD_DC(1);
 	epd_spi_write(d0);
-	EPD_CS(0);
+	EPD_CS(1);
 }
 
 
@@ -201,7 +208,7 @@ void epd_cmd2(int cmd, int d0, int d1)
 	EPD_DC(1);
 	epd_spi_write(d0);
 	epd_spi_write(d1);
-	EPD_CS(0);
+	EPD_CS(1);
 }
 
 
@@ -214,7 +221,7 @@ void epd_cmd3(int cmd, int d0, int d1, int d2)
 	epd_spi_write(d0);
 	epd_spi_write(d1);
 	epd_spi_write(d2);
-	EPD_CS(0);
+	EPD_CS(1);
 }
 
 
@@ -228,7 +235,7 @@ void epd_cmd4(int cmd, int d0, int d1, int d2, int d3)
 	epd_spi_write(d1);
 	epd_spi_write(d2);
 	epd_spi_write(d3);
-	EPD_CS(0);
+	EPD_CS(1);
 }
 
 

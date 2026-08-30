@@ -282,7 +282,7 @@ static void app_clock_timer_cb(void)
 	}
 
     // Not yet synced -- show the pairing QR code instead of the clock face,
-    // following the same 30s-advertise/10-min-cycle cadence as the synced clock
+    // following the same advertise-burst/10-min-cycle cadence as the synced clock
     // (stat>=2: 10-minute boundary, hour change, or day change).
     if(cal_minute<0){
         if(stat>=2){
@@ -295,7 +295,7 @@ static void app_clock_timer_cb(void)
     }
 
     // On a fast-update tick, refresh the ADC reading; stop further work if the battery is low
-	if(flags==4){
+	if(stat>=2){
 		adc1_update();
 		// ADC voltage below 2.6V
         if(adcval<1360){

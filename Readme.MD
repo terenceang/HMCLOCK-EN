@@ -20,6 +20,19 @@ This project utilizes discarded **Hema Electronic Shelf Label (ESL)** hardware f
 
 ## Changelog
 
+### 0xA50f000e
+
+Fixes and reductions from a power-efficiency review (see the review's own findings for full detail; no changes were made to items requiring hardware validation this pass):
+
+* Fixed the low-battery auto-shutdown check (`app_clock_timer_cb`): it compared the wrong variable (`flags`, still holding its pre-computed default) instead of `stat`, so the periodic battery check — and the safety mechanism that stops the device waking every minute once the battery is critical — never ran.
+* Redesigned the pairing/QR screen: version string, "Scan to Pair" wording, and picks a fast or full e-paper update mode per redraw instead of always forcing a full (slower, higher-current) refresh.
+* Increased BLE slave latency from 0 to 4 connection events, so the radio skips most empty connection events instead of waking every 10-20ms for the whole time a phone is connected (ample headroom versus the 2500ms supervision timeout).
+* Shortened the pairing/re-advertise burst window from 30s to 15s (`advertise_period`) — still a generous connect window, at roughly half the previous advertising duty cycle.
+* `epd_cmd1`-`epd_cmd4` now correctly deassert chip-select at the end of each transaction, matching `epd_cmd`/`epd_data`.
+* The EPD `nBUSY` (active-low) input is now pulled up instead of left floating while the panel is powered off between updates.
+* The boot-time panel-detect wait (`epd_wait()`) is now bounded (~1s) instead of an unbounded spin, so a missing/faulty panel can't hang boot forever.
+* The DA14586 build no longer forces UART console logging on; its unconditional `printk()` calls (not gated behind debug-only branches) were blocking entry to extended sleep on nearly every tick. Matches the 531/535 configs, which already leave it off by default.
+
 ### 0xA50f000d
 
 * Fixed a broken placeholder check (`year==2025 && month<=5`, always false) that let the clock face display before the time had ever been synced; the "not yet configured" state is now driven by whether a `clock_set` write has ever been received.
