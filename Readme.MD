@@ -20,6 +20,11 @@ This project utilizes discarded **Hema Electronic Shelf Label (ESL)** hardware f
 
 ## Changelog
 
+### 0xA50f0011
+
+* **The pairing (QR) and low-battery screens now scale to the panel.** `QR_draw()` had every position hard-coded for the smallest 212×104 panel, so on the 250×122 and 296×128 variants the pairing screen left a dead band down the right side and across the bottom. Layout is now derived from the detected panel resolution, exactly like the clock screen. The 212×104 rendering is pixel-identical to before; larger panels fill the screen (the text column and divider stretch to the panel edges, the QR block is vertically centered).
+* Fixed the low-battery screen overflowing short panels: the battery QR was drawn at scale 4 (124 px tall) regardless of panel height, clipping on the 212×104 panel; it now picks scale 4 only where it fits (296×128) and centers itself.
+
 ### 0xA50f0010
 
 * **Fixed negative time-calibration offsets being encoded incorrectly by the web app.** The calibration writer computed the high byte of the signed 16-bit offset with a fractional division (`diff/256`), which truncates toward zero in JS — a device running *fast* by N seconds received `+256−N`-ish corrections in the wrong direction (e.g. −10 s became +246 s), making drift *worse*. Encoding now uses proper two's-complement bitwise ops.

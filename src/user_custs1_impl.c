@@ -516,50 +516,73 @@ void QR_draw(int mode)
 	char tbuf[16];
 	int w;
 
+	// Current panel in landscape drawing coordinates (set by select_layout())
+	int xres = layouts[current_layout].xres;
+	int yres = layouts[current_layout].yres;
+
 	epd_hw_open();
 
 	epd_update_mode(mode);
 
 	fb_clear();
 
-	draw_qr_code(5, 5, 3, QR_31x31);
-	// Text column center: QR code occupies x=5..97, leaving x=98..211 for text.
-	// Rows use pen-y; sfont glyphs render at pen-y+5..pen-y+14 (baseline at +14).
-	// The rhythm is symmetric about the QR center (y=51): bands 9-18, 28-37,
-	// divider 51, 65-74, 84-92 -- 10px inside groups, 14px between groups.
-	const int col_cx = 155;
-	draw_text_centered(col_cx, 4, "Bluetooth", BLACK);
+	// QR code: fixed scale-3 (93x93) block on the left, vertically centered --
+	// on the 212x104 reference panel this lands exactly at the original (5,5).
+	int qr_x = xres*5/212;
+	int qr_y = (yres - 93)/2;
+	int qcy  = qr_y + 93/2;   // QR vertical center = screen optical center
+	draw_qr_code(qr_x, qr_y, 3, QR_31x31);
+
+	// Text column: everything right of the QR block between equal side margins.
+	// Rows use pen-y offsets from qcy; sfont glyphs render at pen-y+5..pen-y+14
+	// (baseline at +14). The rhythm is symmetric about the divider: bands
+	// -42..-33, -23..-14, +14..+23, +33..+42 -- 10px inside groups, 14px between.
+	int col_x1 = qr_x + 103;
+	int col_x2 = xres - 10;
+	int col_cx = (col_x1 + col_x2)/2;
+
+	draw_text_centered(col_cx, qcy-47, "Bluetooth", BLACK);
 	if(adv_state){
 		// Bluetooth icon, shown only while advertising -- mirrors clock_draw()'s DRAW_BT icon
-		draw_bt(195, 8);
+		draw_bt(xres-17, qcy-43);
 	}
 	sprintf(tbuf, "DCLK-%s", bt_id);
-	draw_text_centered(col_cx, 23, tbuf, BLACK);
+	draw_text_centered(col_cx, qcy-28, tbuf, BLACK);
 
-	// Solid divider on the optical center: midpoint of the neighboring text bands (37 and 65)
-	draw_hline(51, 108, 202, BLACK);
+	// Solid divider on the optical center: midpoint of the neighboring text bands
+	draw_hline(qcy, col_x1, col_x2, BLACK);
 
-	draw_text_centered(col_cx, 60, "Scan to Pair", BLACK);
+	draw_text_centered(col_cx, qcy+9, "Scan to Pair", BLACK);
 
 	// Version + battery level, nudged left of the column center so the pair
 	// stays visually centered (composite center ~= col_cx).
 	sprintf(tbuf, "v%08X", EPD_VERSION);
 	w = text_width(tbuf);
-	draw_text(150 - w/2, 79, tbuf, BLACK);
-	draw_batt(194, 88);
+	draw_text(col_cx-5 - w/2, qcy+28, tbuf, BLACK);
+	draw_batt(xres-18, qcy+37);
 	// Update the e-paper display
 	epd_commit();
 }
 
 void LB_draw()
 {
+	// Current panel in landscape drawing coordinates (set by select_layout())
+	int xres = layouts[current_layout].xres;
+	int yres = layouts[current_layout].yres;
+
+	// Battery QR: scale 4 on the largest panel, 3 where a 124px block would not
+	// fit; centered on the screen. (The old hard-coded scale-4 position overflew
+	// the 212x104 panel's height.)
+	int scale = (yres >= 128)? 4 : 3;
+	int side  = 31*scale;
+
 	epd_hw_open();
 
 	epd_update_mode(UPDATE_FULL);
 
 	fb_clear();
 
-	draw_qr_code(60, 10, 4, LB_31x31);
+	draw_qr_code((xres-side)/2, (yres-side)/2, scale, LB_31x31);
 
 	// Update the e-paper display
 	epd_commit();
