@@ -1,0 +1,34 @@
+name: sync-docs
+
+# WebApp/WebApp_EN/index.html is the single source of truth for the published
+# page. This workflow copies it into docs/ so the two can never drift apart.
+
+on:
+  push:
+    branches: [main]
+    paths: ['WebApp/WebApp_EN/index.html']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Copy web app into docs/
+        run: cp WebApp/WebApp_EN/index.html docs/index.html
+
+      - name: Commit if changed
+        run: |
+          if git diff --quiet docs/index.html; then
+            echo "docs/index.html already up to date"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add docs/index.html
+            git commit -m "Sync docs/index.html from WebApp/WebApp_EN [skip ci]"
+            git push
+          fi

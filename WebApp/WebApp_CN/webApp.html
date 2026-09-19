@@ -106,7 +106,8 @@
     <div class="card-effect p-5 md:p-6 space-y-6">
       <!-- 控制按钮区域 -->
       <div class="flex flex-wrap gap-3 md:gap-4">
-        <button id="connect-button" class="bg-primary text-white px-5 py-2.5 rounded-lg flex items-center gap-2 btn-hover font-medium">
+        <!-- 初始为禁用状态，确认存在蓝牙适配器后才启用 -->
+        <button id="connect-button" class="bg-primary text-white px-5 py-2.5 rounded-lg flex items-center gap-2 btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
           <i class="fa fa-bluetooth"></i> 连接设备
         </button>
         <button id="setime-button" class="bg-warning text-white px-5 py-2.5 rounded-lg flex items-center gap-2 btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
@@ -125,6 +126,9 @@
           <i class="fa fa-desktop"></i> 跟随系统
         </button>
       </div>
+
+      <!-- 蓝牙可用性/连接错误提示横幅 -->
+      <div id="bt-status" class="hidden"></div>
 
       <!-- 时钟卡片视图: 左侧模拟时钟, 右侧仿 iOS 日历图标 -->
       <div id="clock-card-view" class="flex flex-wrap items-stretch justify-center gap-4 p-4 bg-gray-50 dark:bg-slate-900/60 rounded-lg border border-gray-100 dark:border-slate-700">
@@ -277,6 +281,14 @@
     const wdayShort = ['日', '一', '二', '三', '四', '五', '六'];
     const cardView = document.getElementById('clock-card-view');
     const cardviewButton = document.getElementById('cardview-button');
+    const clockHands = {
+      hour:   document.getElementById('hour-hand'),
+      minute: document.getElementById('minute-hand'),
+      second: document.getElementById('second-hand')
+    };
+    const calWeekday = document.getElementById('cal-weekday');
+    const calDate = document.getElementById('cal-date');
+    const calYear = document.getElementById('cal-year');
     let cardViewOn = true;
 
     cardviewButton.addEventListener('click', () => {
@@ -307,13 +319,13 @@
       const minDeg = minute * 6 + second * 0.1;
       const hourDeg = (hour % 12) * 30 + minute * 0.5;
 
-      document.getElementById('second-hand').setAttribute('transform', `rotate(${secDeg} 100 100)`);
-      document.getElementById('minute-hand').setAttribute('transform', `rotate(${minDeg} 100 100)`);
-      document.getElementById('hour-hand').setAttribute('transform', `rotate(${hourDeg} 100 100)`);
+      clockHands.second.setAttribute('transform', `rotate(${secDeg} 100 100)`);
+      clockHands.minute.setAttribute('transform', `rotate(${minDeg} 100 100)`);
+      clockHands.hour.setAttribute('transform', `rotate(${hourDeg} 100 100)`);
 
-      document.getElementById('cal-weekday').textContent = '周' + wdayShort[date.getDay()];
-      document.getElementById('cal-date').textContent = date.getDate().toString().padStart(2, '0');
-      document.getElementById('cal-year').textContent = date.getFullYear();
+      calWeekday.textContent = '周' + wdayShort[date.getDay()];
+      calDate.textContent = date.getDate().toString().padStart(2, '0');
+      calYear.textContent = date.getFullYear();
     }
 
     // 系统时间更新
@@ -395,6 +407,77 @@
       logWindow.innerHTML = '<div class="text-gray-400 log-entry">日志已清空</div>';
     });
 
+    // 本机是否有可用的蓝牙 radio。初始为 false，确保可用性检查完成前无法点击连接按钮
+    let bluetoothAvailable = false;
+
+    // 状态提示横幅
+    const btStatus = document.getElementById('bt-status');
+
+    function showStatus(message, type = 'error') {
+      const palette = {
+        error:   'bg-red-50 dark:bg-red-900/30 border-red-300 dark:border-red-700 text-red-800 dark:text-red-200',
+        warning: 'bg-yellow-50 dark:bg-yellow-900/30 border-yellow-300 dark:border-yellow-700 text-yellow-800 dark:text-yellow-200'
+      };
+      const icon = type === 'warning' ? 'fa-exclamation-triangle' : 'fa-exclamation-circle';
+      btStatus.className = 'rounded-lg border px-4 py-3 text-sm flex items-start gap-3 ' + palette[type];
+      btStatus.innerHTML = `<i class="fa ${icon} mt-0.5"></i><div>${message}</div>`;
+    }
+
+    function hideStatus() {
+      btStatus.className = 'hidden';
+      btStatus.innerHTML = '';
+    }
+
+    // 启用/禁用按钮，并同步其禁用样式
+    function setButtonEnabled(button, enabled) {
+      button.disabled = !enabled;
+      button.classList.toggle('opacity-50', !enabled);
+      button.classList.toggle('cursor-not-allowed', !enabled);
+    }
+
+    // 三个依赖设备连接的操作按钮
+    const deviceButtons = [
+      document.getElementById('setime-button'),
+      document.getElementById('upfirm-button'),
+      document.getElementById('calibration-button')
+    ];
+
+    function setDeviceButtonsEnabled(enabled) {
+      deviceButtons.forEach(button => setButtonEnabled(button, enabled));
+    }
+
+    // 启用/禁用连接按钮，并同步其样式
+    function setConnectEnabled(enabled) {
+      setButtonEnabled(document.getElementById('connect-button'), enabled);
+    }
+
+    // 针对各类失败原因，给出用户可以实际操作的提示信息
+    const NO_ADAPTER_MSG = '此电脑未找到蓝牙适配器。请插入蓝牙 4.0+（BLE）USB 适配器，或改在自带蓝牙的设备上打开本页面。';
+    const UNSUPPORTED_MSG = '此浏览器不支持 Web Bluetooth。请在桌面端使用 Chrome、Edge 或 Opera，或在 Android 端使用 Chrome。Firefox、Safari 以及所有 iPhone/iPad 浏览器均无法连接。';
+
+    // 将 Web Bluetooth 的失败原因转换为用户可理解的信息
+    function describeError(error) {
+      const name = error && error.name;
+      const message = (error && error.message) || String(error);
+
+      if (!navigator.bluetooth) return UNSUPPORTED_MSG;
+      // Chrome 将缺少蓝牙 radio 报告为 NotFoundError，与选择器为空时相同
+      if (name === 'NotFoundError' && /adapter/i.test(message)) return NO_ADAPTER_MSG;
+      if (name === 'NotFoundError') {
+        return '未选择任何设备。选择器只列出广播名以 "DCLK" 开头的时钟——请确认时钟已上电、正在广播，且未被其他手机或电脑连接。';
+      }
+      if (name === 'SecurityError') {
+        return '被浏览器拦截。Web Bluetooth 需要安全页面（https:// 或 localhost）；直接从本地磁盘打开此文件将无法连接。';
+      }
+      if (name === 'NetworkError') {
+        return '与时钟的连接已断开。请靠近时钟、将其重新上电后再试。';
+      }
+      if (name === 'NotSupportedError') {
+        return '时钟未提供预期的服务（0xff00）。固件版本可能不兼容。';
+      }
+      return `${name || 'Error'}: ${message}`;
+    }
+
     // 核心功能代码
     var connected = false;
     var device = null;
@@ -408,36 +491,29 @@
       return `${year}-${month.toString().padStart(2, '0')}-${mday.toString().padStart(2, '0')} ${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
     }
     
-    // 更新设备时间显示
+    // 更新设备时间显示(从基准值推算设备当前时间)
     function updateDeviceTime() {
       if (!deviceTimeBase) return;
-      
-      // 获取基准时间
-      let { year, month, mday, hour, minute, second } = deviceTimeBase;
-      
-      // 计算从基准时间开始经过的秒数
-      const now = new Date();
-      const elapsedSeconds = Math.floor((now - deviceTimeBase.timestamp) / 1000);
-      
-      // 更新时间
-      let totalSeconds = second + elapsedSeconds;
-      second = totalSeconds % 60;
-      let totalMinutes = minute + Math.floor(totalSeconds / 60);
-      minute = totalMinutes % 60;
-      let totalHours = hour + Math.floor(totalMinutes / 60);
-      hour = totalHours % 24;
-      // 此处忽略天数变化，因为设备时间通常不会长时间运行
-      
-      // 更新显示
-      document.getElementById('current_time').textContent = formatTime(year, month, mday, hour, minute, second);
+
+      const t = deviceCurrentTime();
+      document.getElementById('current_time').textContent = formatTime(
+        t.getFullYear(), t.getMonth(), t.getDate(),
+        t.getHours(), t.getMinutes(), t.getSeconds()
+      );
 
       // 已连接设备时，卡片视图以设备时间驱动
-      renderClockCard(new Date(year, month, mday, hour, minute, second));
+      renderClockCard(t);
     }
 
     function onClick() {
-      if(connected) disconnect();
-      else connectToDevice();
+      if(connected) { disconnect(); return; }
+      // 双重保险：确认存在蓝牙 radio 后才尝试连接
+      if(!bluetoothAvailable) {
+        showStatus(navigator.bluetooth ? NO_ADAPTER_MSG : UNSUPPORTED_MSG);
+        setConnectEnabled(false);
+        return;
+      }
+      connectToDevice();
     }
 
     // 连接设备
@@ -449,6 +525,7 @@
         connectButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> 连接中...';
         
         console.log('请求设备...');
+        hideStatus();
         device = await navigator.bluetooth.requestDevice({
           filters: [{ namePrefix: "DCLK" }],
           optionalServices: [ 0xff00 ]
@@ -461,7 +538,6 @@
         console.log('设备已连接');
 
         let service = await server.getPrimaryService(0xff00);
-        let ctrlPoint = await service.getCharacteristic(0xff03);
         let adc1Value = await service.getCharacteristic(0xff02);
         longValue = await service.getCharacteristic(0xff01);
 
@@ -490,25 +566,17 @@
         if (deviceTimeInterval) clearInterval(deviceTimeInterval);
         deviceTimeInterval = setInterval(updateDeviceTime, 1000);
 
-        let now = new Date();
-        document.getElementById('system_time').textContent = formatTime(
-          now.getFullYear(), now.getMonth(), now.getDate(),
-          now.getHours(), now.getMinutes(), now.getSeconds()
-        );
-
         connected = true;
-        document.getElementById('setime-button').disabled = false;
-        document.getElementById('upfirm-button').disabled = false;
-        document.getElementById('calibration-button').disabled = false;
-        document.getElementById('setime-button').classList.remove('opacity-50', 'cursor-not-allowed');
-        document.getElementById('upfirm-button').classList.remove('opacity-50', 'cursor-not-allowed');
-        document.getElementById('calibration-button').classList.remove('opacity-50', 'cursor-not-allowed');
-        
+        setDeviceButtonsEnabled(true);
+
         connectButton.innerHTML = '<i class="fa fa-disconnect"></i> 断开连接';
         connectButton.disabled = false;
       } catch (error) {
         console.log('连接失败:', error);
+        // 先执行 disconnect()，让下面给出的具体原因覆盖 onDisconnect() 可能
+        // 设置的通用提示
         disconnect();
+        showStatus(describeError(error));
       }
     }
 
@@ -519,12 +587,8 @@
       setimeButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> 同步中...';
       
       try {
-        // 等待整秒时间
-        while(true){
-          const tm_ms = Date.now();
-          if((tm_ms%1000)==0)
-            break;
-		}
+        // 等待到下一秒的开始，确保发送的时间精确
+        await new Promise(resolve => setTimeout(resolve, 1000 - (Date.now() % 1000)));
 
         let now = new Date();
         let year = now.getFullYear(),
@@ -679,30 +743,28 @@
     }
 
 	async function onCalibration() {
-		document.getElementById('calibration-button').disabled = true;
+	  const calibrationButton = document.getElementById('calibration-button');
+	  calibrationButton.disabled = true;
 
-		var minute, second, last_minute, cal_minute;
-
-		cur_time = await longValue.readValue();
-		last_minute = cur_time.getUint8(5);
-		cal_minute = cur_time.getInt32(7, true);
+	  try {
+		let cur_time = await longValue.readValue();
+		const last_minute = cur_time.getUint8(5);
+		const cal_minute = cur_time.getInt32(7, true);
 		console.log('对时后'+cal_minute+'分钟');
 
-        console.log('等待分钟跳变......');
-        while(true) {
-          cur_time = await longValue.readValue();
-          minute = cur_time.getUint8(5);
-            if(minute != last_minute)
-              break;
-                last_minute = minute;
-        }
-        second = cur_time.getUint8(6);
+		console.log('等待分钟跳变......');
+		let minute = last_minute;
+		while (minute === last_minute) {
+		  cur_time = await longValue.readValue();
+		  minute = cur_time.getUint8(5);
+		}
+		const second = cur_time.getUint8(6);
 
-        var today = new Date();
-        var sys_minute = today.getMinutes();
-        var sys_second = today.getSeconds();
-        console.log('设备时间: '+minute+'分'+second+'秒');
-        console.log('系统时间: '+sys_minute+'分'+sys_second+'秒');
+		const today = new Date();
+		let sys_minute = today.getMinutes();
+		const sys_second = today.getSeconds();
+		console.log('设备时间: '+minute+'分'+second+'秒');
+		console.log('系统时间: '+sys_minute+'分'+sys_second+'秒');
 
 		if(cal_minute==-1){
 			console.log('请先对时!');
@@ -718,19 +780,22 @@
 					minute += 60;
 			}
 
-			var diff = (minute*60+second)-(sys_minute*60+sys_second);
+			const diff = (minute*60+second)-(sys_minute*60+sys_second);
 			console.log('时间差: '+diff+'秒');
 
-			var buf = new Uint8Array(4);
+			// 有符号 16 位、小端序——按位运算可确保负数差值得到正确的补码字节
+			const buf = new Uint8Array(4);
 			buf[0] = 0x92;
-			buf[1] = diff%256;
-			buf[2] = diff/256;
+			buf[1] = diff & 0xff;
+			buf[2] = (diff >> 8) & 0xff;
 			buf[3] = 0x00;
 			await longValue.writeValue(buf);
 
 			console.log('校准完成');
 		}
-		document.getElementById('calibration-button').disabled = false;
+	  } finally {
+		calibrationButton.disabled = false;
+	  }
 	}
 
     // 断开连接
@@ -738,13 +803,8 @@
       const connectButton = document.getElementById('connect-button');
       connectButton.disabled = true;
       connectButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> 断开中...';
-      
-      document.getElementById('setime-button').disabled = true;
-      document.getElementById('upfirm-button').disabled = true;
-      document.getElementById('calibration-button').disabled = true; 
-      document.getElementById('setime-button').classList.add('opacity-50', 'cursor-not-allowed');
-      document.getElementById('upfirm-button').classList.add('opacity-50', 'cursor-not-allowed');
-      document.getElementById('calibration-button').classList.add('opacity-50', 'cursor-not-allowed');
+
+      setDeviceButtonsEnabled(false);
 
       // 清除设备时间更新定时器
       if (deviceTimeInterval) {
@@ -763,17 +823,69 @@
     function onDisconnect() {
       device = null;
       connected = false;
-      
+
       document.getElementById('device_name').textContent = "未连接";
       document.getElementById('current_voltage').textContent = "--.- V";
       document.getElementById('current_time').textContent = "--:--:--";
 
       const connectButton = document.getElementById('connect-button');
       connectButton.innerHTML = '<i class="fa fa-bluetooth"></i> 连接设备';
-      connectButton.disabled = false;
-      
+      // 只有仍存在可用的蓝牙 radio 时才重新提供连接按钮
+      setConnectEnabled(bluetoothAvailable);
+      if (!bluetoothAvailable) showStatus(NO_ADAPTER_MSG);
+
       console.log('设备已断开连接');
     }
+
+    // 预先检查蓝牙是否可用，避免点击连接时才报出难以理解错误
+    async function checkBluetoothAvailability() {
+      if (!navigator.bluetooth) {
+        showStatus(UNSUPPORTED_MSG);
+        setConnectEnabled(false);
+        console.log('此浏览器不支持 Web Bluetooth');
+        return;
+      }
+
+      let available;
+      try {
+        available = await navigator.bluetooth.getAvailability();
+      } catch (error) {
+        // 旧版浏览器可能未实现 getAvailability。此时宁可放行(保持按钮可用)，
+        // 让点击时的报错来说明问题，也不能把按钮永久卡在禁用状态。
+        console.log('蓝牙可用性检查失败:', error);
+        bluetoothAvailable = true;
+        setConnectEnabled(true);
+        return;
+      }
+
+      bluetoothAvailable = available;
+      if (available) {
+        hideStatus();
+      } else {
+        showStatus(NO_ADAPTER_MSG);
+        console.log('无可用蓝牙适配器');
+      }
+      setConnectEnabled(available);
+    }
+
+    // 页面打开期间，监听适配器的插入/移除并重新检查
+    if (navigator.bluetooth && navigator.bluetooth.addEventListener) {
+      navigator.bluetooth.addEventListener('availabilitychanged', (event) => {
+        // 无论是否处于连接会话中，都要记录最新状态：若连接期间适配器被拔出，
+        // onDisconnect() 会依据该状态保持连接按钮禁用。
+        bluetoothAvailable = event.value;
+        console.log(event.value ? '检测到蓝牙适配器' : '蓝牙适配器已移除');
+
+        // 连接期间该按钮是"断开连接"控制，保持原样
+        if (connected) return;
+
+        if (event.value) hideStatus();
+        else showStatus(NO_ADAPTER_MSG);
+        setConnectEnabled(event.value);
+      });
+    }
+
+    checkBluetoothAvailability();
 
     // 事件绑定
     document.getElementById('connect-button').addEventListener('click', onClick);

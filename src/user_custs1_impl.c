@@ -57,12 +57,6 @@
  ****************************************************************************************
  */
 
-// Timer ID, used for scheduled system tasks
-ke_msg_id_t timer_used      __SECTION_ZERO("retention_mem_area0"); //@RETENTION MEMORY
-// Indication counter, used for BLE notification counting
-uint16_t indication_counter __SECTION_ZERO("retention_mem_area0"); //@RETENTION MEMORY
-// Non-database value counter
-uint16_t non_db_val_counter __SECTION_ZERO("retention_mem_area0"); //@RETENTION MEMORY
 // ADC sample value, used for battery level detection
 int adcval;
 
@@ -497,18 +491,36 @@ static void epd_wait_timer(void)
 }
 
 
+// Clear both framebuffers to a blank (white) screen before drawing a new one
+static void fb_clear(void)
+{
+	memset(fb_bw, 0xff, scr_h*line_bytes);
+	memset(fb_rr, 0x00, scr_h*line_bytes);
+}
+
+// Flush the framebuffers to the panel, then park the system until the update
+// completes (see epd_wait_timer above)
+static void epd_commit(void)
+{
+	epd_init();
+	epd_screen_update();
+	epd_update();
+	// Deep sleep during an update causes screen corruption. Temporarily disable sleep.
+	arch_set_sleep_mode(ARCH_SLEEP_OFF);
+	epd_wait_hnd = app_easy_timer(40, epd_wait_timer);
+}
+
+
 void QR_draw(int mode)
 {
 	char tbuf[16];
 	int w;
 
-	// QR code drawing logic goes here
 	epd_hw_open();
 
 	epd_update_mode(mode);
 
-	memset(fb_bw, 0xff, scr_h*line_bytes);
-	memset(fb_rr, 0x00, scr_h*line_bytes);
+	fb_clear();
 
 	draw_qr_code(5, 5, 3, QR_31x31);
 	// Text column center: QR code occupies x=5..97, leaving x=98..211 for text.
@@ -536,33 +548,21 @@ void QR_draw(int mode)
 	draw_text(150 - w/2, 79, tbuf, BLACK);
 	draw_batt(194, 88);
 	// Update the e-paper display
-	epd_init();
-	epd_screen_update();
-	epd_update();
-	// Deep sleep during an update causes screen corruption. Temporarily disable sleep.
-	arch_set_sleep_mode(ARCH_SLEEP_OFF);
-	epd_wait_hnd = app_easy_timer(40, epd_wait_timer);
+	epd_commit();
 }
 
 void LB_draw()
 {
-	// Low-battery icon drawing logic goes here
 	epd_hw_open();
 
 	epd_update_mode(UPDATE_FULL);
 
-	memset(fb_bw, 0xff, scr_h*line_bytes);
-	memset(fb_rr, 0x00, scr_h*line_bytes);
+	fb_clear();
 
 	draw_qr_code(60, 10, 4, LB_31x31);
 
 	// Update the e-paper display
-	epd_init();
-	epd_screen_update();
-	epd_update();
-	// Deep sleep during an update causes screen corruption. Temporarily disable sleep.
-	arch_set_sleep_mode(ARCH_SLEEP_OFF);
-	epd_wait_hnd = app_easy_timer(40, epd_wait_timer);
+	epd_commit();
 }
 
 // Integer sin(deg)*1000 for deg=0..90; other quadrants derived by symmetry in isin()/icos().
@@ -707,19 +707,14 @@ void clock_draw(int flags)
 	// clears the retained ghosts that fast/partial updates leave behind; the
 	// next minute's forced full redraw (app_clock_timer_cb) restores the face.
 	if(flags&DRAW_CLEAN){
+		// Drive the panel solid black (both planes 0x00) for the ghost scrub
 		memset(fb_bw, 0x00, scr_h*line_bytes);
 		memset(fb_rr, 0x00, scr_h*line_bytes);
-		epd_init();
-		epd_screen_update();
-		epd_update();
-		// Deep sleep during an update causes screen corruption. Temporarily disable sleep.
-		arch_set_sleep_mode(ARCH_SLEEP_OFF);
-		epd_wait_hnd = app_easy_timer(40, epd_wait_timer);
+		epd_commit();
 		return;
 	}
 
-	memset(fb_bw, 0xff, scr_h*line_bytes);
-	memset(fb_rr, 0x00, scr_h*line_bytes);
+	fb_clear();
 
 	xres = lt->xres;
 	yres = lt->yres;
@@ -753,12 +748,7 @@ void clock_draw(int flags)
 	}
 
 	// Update the e-paper display
-	epd_init();
-	epd_screen_update();
-	epd_update();
-	// Deep sleep during an update causes screen corruption. Temporarily disable sleep.
-	arch_set_sleep_mode(ARCH_SLEEP_OFF);
-	epd_wait_hnd = app_easy_timer(40, epd_wait_timer);
+	epd_commit();
 }
 
 

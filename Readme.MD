@@ -20,6 +20,15 @@ This project utilizes discarded **Hema Electronic Shelf Label (ESL)** hardware f
 
 ## Changelog
 
+### 0xA50f0010
+
+* **Fixed negative time-calibration offsets being encoded incorrectly by the web app.** The calibration writer computed the high byte of the signed 16-bit offset with a fractional division (`diff/256`), which truncates toward zero in JS — a device running *fast* by N seconds received `+256−N`-ish corrections in the wrong direction (e.g. −10 s became +246 s), making drift *worse*. Encoding now uses proper two's-complement bitwise ops.
+* Removed the unused BLE `0x90` toggle-12/24-hour-format command and its "Toggle Format" web button: the firmware set a format flag that was never read anywhere (the clock is analog), so the command did nothing.
+* Web app (both EN and CN): the Bluetooth availability check + error banner that only existed on the published GitHub Pages copy is now in the source versions — Connect starts disabled until a radio is confirmed, and connect failures show an actionable message (no adapter / unsupported browser / picker cancelled / insecure context / lost connection).
+* Web app robustness: the calibration button no longer stays permanently disabled if the device disconnects mid-calibration (try/finally); the exact-second wait before time sync no longer busy-spins the UI thread; device time derivation unified into one helper (day rollover now displays correctly during long sessions); removed dead code (unused FF03 characteristic fetch, redundant system-time write on connect).
+* Firmware cleanup: the e-paper update-commit sequence (4 copies) and framebuffer clear (3 copies) are deduplicated into `epd_commit()`/`fb_clear()` helpers; removed unused retained-memory globals left over from the SDK template.
+* Repo hygiene: `docs/index.html` (the published page) is now generated from `WebApp/WebApp_EN/index.html` by a GitHub Actions workflow (`.github/workflows/sync-docs.yml`) — edit the WebApp_EN copy only; the published site syncs automatically.
+
 ### 0xA50f000f
 
 * **Fixed firmware not persisting across resets on some units.** The stock product header on these units points the two firmware slots at overlapping addresses (`0x2000`/`0x4000`), and the boot chain boots slot 0 regardless of generation id — so self-flash and OTA updates written to the "inactive" slot were ignored, and the device reverted to the old firmware on every reset. Self-flash now installs the build into the primary slot (slot 0 from the product header) with a generation id one above any existing slot, so it wins under every booter selection policy. See `Programming.md` for the full analysis.
