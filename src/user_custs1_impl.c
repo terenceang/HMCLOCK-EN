@@ -66,8 +66,6 @@ uint16_t non_db_val_counter __SECTION_ZERO("retention_mem_area0"); //@RETENTION 
 // ADC sample value, used for battery level detection
 int adcval;
 
-static uint8_t h24_format = 1; // 24-hour format flag
-
 extern int adv_state;
 /*
  * FUNCTION DEFINITIONS
@@ -816,15 +814,6 @@ void user_svc1_long_val_wr_ind_handler(ke_msg_id_t const msgid,
 		clock_draw(DRAW_BT|UPDATE_FAST);
 		// Print the current time
 		clock_print();
-	}else if(param->value[0]==0x90){
-		// Toggle 24/12-hour format
-		h24_format = !h24_format;
-		if(cal_minute<0){
-			// Not yet synced -- keep showing the pairing QR code
-			QR_draw(UPDATE_FAST);
-		}else{
-			clock_draw(DRAW_BT|UPDATE_FAST);
-		}
 	}else if(param->value[0]==0x92){
 		// Time calibration (needs at least buf[1..2], 3 bytes total)
 		if(len<3) return;
