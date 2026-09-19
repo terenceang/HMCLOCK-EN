@@ -20,6 +20,17 @@ This project utilizes discarded **Hema Electronic Shelf Label (ESL)** hardware f
 
 ## Changelog
 
+### 0xA50f000f
+
+* **Fixed firmware not persisting across resets on some units.** The stock product header on these units points the two firmware slots at overlapping addresses (`0x2000`/`0x4000`), and the boot chain boots slot 0 regardless of generation id — so self-flash and OTA updates written to the "inactive" slot were ignored, and the device reverted to the old firmware on every reset. Self-flash now installs the build into the primary slot (slot 0 from the product header) with a generation id one above any existing slot, so it wins under every booter selection policy. See `Programming.md` for the full analysis.
+* Generation ids are now wrap-safe: the id was previously incremented without a check, so after enough updates it passed `0x7F` and became `0x80` (`-128` as a signed char), ranking the new image *below* every other image.
+* Added a readable BLE diagnostics characteristic **FF04** (32 bytes) exposing the boot/OTP marker, boot header, running version, and what the last boot's flash update did (install vs up-to-date skip, and which field mismatched). Documented in `Programming.md`.
+* Added `Programming.md`: how firmware persistence works, how to program the device permanently (debugger RAM load or OTA), flash layout, and the FF04 diagnostic reference.
+* Pairing screen polish: rows re-spaced to be symmetric about the QR center using the real font metrics (the version row no longer touches the bottom edge), version string now uppercase (`vA50F000E`), the uneven text-dash divider replaced with a crisp drawn line on the optical center, and a battery-level glyph added next to the version.
+* Clock face polish: the dial no longer touches the card frame (2 px breathing room), and the pivot hub shrank from a chunky 5×5 to a 3×3 square so it doesn't outweigh the 1 px hands.
+* Nightly ghost scrub: at midnight the panel is driven solid black with a full refresh (then the face is restored with a forced full update on the next minute tick), which clears the e-paper ghosting — including stock-image residue like the red price-tag highlights — that fast/partial updates leave behind.
+* Re-enabled UART console logging (`CFG_PRINTF`) in the DA14585 config for debugging; note that leaving it on blocks extended sleep whenever a log line prints, so turn it off for power-sensitive builds.
+
 ### 0xA50f000e
 
 Fixes and reductions from a power-efficiency review (see the review's own findings for full detail; no changes were made to items requiring hardware validation this pass):
@@ -91,7 +102,7 @@ Please download the DA14585 [SDK](https://www.renesas.com/en/document/swo/sdk602
 
 3. Once compiled:
 
-   * **Run in debug mode once**, and the firmware will be automatically written to Flash;
+   * **Run in debug mode once**, and the firmware will be automatically written to Flash (see [`Programming.md`](Programming.md) for how persistence works and what to expect on the first boot);
    * Or use the **SmartSnippets Toolbox** to download the firmware to RAM and run it once;
    * Or flash it with **OpenOCD** (see below) if you're using a CMSIS-DAP/ST-Link probe instead of a J-Link.
 
@@ -117,7 +128,7 @@ Notes:
 
 The project's built-in web page provides **Web Bluetooth** functionality for manual time synchronization:
 
-* The firmware broadcasts every **10 minutes on the dot**, lasting for **30 seconds**;
+* The firmware broadcasts every **10 minutes on the dot**, lasting for **15 seconds**;
 * During broadcasting, the screen displays a Bluetooth icon and the device name suffix;
 * Open the web page, click "Connect", select your device, and click "Sync Time" to complete the synchronization.
 
@@ -158,6 +169,21 @@ The types of Hema ESL screens used in this project are listed below:
 ---
 
 ### Flash Storage Layout
+
+#### Firmware slots and boot headers
+
+The boot chain (ROM or the ESL's OTP boot loader) reads the **product header at
+`0x38000`** (`70 52 ...`), which contains the start addresses of two firmware
+image slots. Each slot begins with a 64-byte Dialog SUOTA image header
+(`70 51 AA` + generation id, code size, CRC32, version at offset 28).
+
+* The slot addresses are **not fixed** — read them from the product header.
+  Most units use `0x4000`/`0x1F000`; some units use `0x2000`/`0x4000` with
+  overlapping slots, and their boot chain boots slot 0 unconditionally.
+* Self-flash (`selflash()` in `src/epd/spi_flash.c`) installs new builds into
+  the primary slot with a wrap-safe generation id; see [`Programming.md`](Programming.md).
+* A legacy single-image boot header (`70 50 ...`) may also exist at `0x00000`;
+  on the units tested it is not used by the boot chain.
 
 #### Screen Pin Configuration (Address `0x39000`)
 

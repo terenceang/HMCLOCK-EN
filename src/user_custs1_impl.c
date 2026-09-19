@@ -117,6 +117,28 @@ int adc1_update(void)
 }
 
 
+/**
+ * @brief Publish the boot/flash diagnostics collected by selflash() into the
+ *        readable FF04 characteristic, so they can be inspected with any BLE
+ *        scanner (no UART console needed). Byte layout: see spi_flash.c.
+ */
+void diag_val_update(void)
+{
+    struct custs1_val_set_req *req = KE_MSG_ALLOC_DYN(CUSTS1_VAL_SET_REQ,
+                                                      prf_get_task_from_id(TASK_ID_CUSTS1),
+                                                      TASK_APP,
+                                                      custs1_val_set_req,
+                                                      DEF_SVC1_DIAG_VAL_CHAR_LEN);
+    req->conidx = app_env->conidx;
+    req->handle = SVC1_IDX_DIAG_VAL_VAL;
+    req->length = DEF_SVC1_DIAG_VAL_CHAR_LEN;
+    for(int i=0; i<DEF_SVC1_DIAG_VAL_CHAR_LEN; i++){
+        req->value[i] = flash_diag[i];
+    }
+    KE_MSG_SEND(req);
+}
+
+
 /****************************************************************************************/
 
 /**
@@ -480,6 +502,7 @@ static void epd_wait_timer(void)
 void QR_draw(int mode)
 {
 	char tbuf[16];
+	int w;
 
 	// QR code drawing logic goes here
 	epd_hw_open();
@@ -491,21 +514,29 @@ void QR_draw(int mode)
 
 	draw_qr_code(5, 5, 3, QR_31x31);
 	// Text column center: QR code occupies x=5..97, leaving x=98..211 for text.
+	// Rows use pen-y; sfont glyphs render at pen-y+5..pen-y+14 (baseline at +14).
+	// The rhythm is symmetric about the QR center (y=51): bands 9-18, 28-37,
+	// divider 51, 65-74, 84-92 -- 10px inside groups, 14px between groups.
 	const int col_cx = 155;
-	draw_text_centered(col_cx, 5, "Bluetooth", BLACK);
+	draw_text_centered(col_cx, 4, "Bluetooth", BLACK);
 	if(adv_state){
 		// Bluetooth icon, shown only while advertising -- mirrors clock_draw()'s DRAW_BT icon
 		draw_bt(195, 8);
 	}
 	sprintf(tbuf, "DCLK-%s", bt_id);
-	draw_text_centered(col_cx, 26, tbuf, BLACK);
+	draw_text_centered(col_cx, 23, tbuf, BLACK);
 
-	draw_text_centered(col_cx, 47, "-------------", BLACK);
+	// Solid divider on the optical center: midpoint of the neighboring text bands (37 and 65)
+	draw_hline(51, 108, 202, BLACK);
 
-	draw_text_centered(col_cx, 68, "Scan to Pair", BLACK);
+	draw_text_centered(col_cx, 60, "Scan to Pair", BLACK);
 
-	sprintf(tbuf, "v%08x", EPD_VERSION);
-	draw_text_centered(col_cx, 90, tbuf, BLACK);
+	// Version + battery level, nudged left of the column center so the pair
+	// stays visually centered (composite center ~= col_cx).
+	sprintf(tbuf, "v%08X", EPD_VERSION);
+	w = text_width(tbuf);
+	draw_text(150 - w/2, 79, tbuf, BLACK);
+	draw_batt(194, 88);
 	// Update the e-paper display
 	epd_init();
 	epd_screen_update();
@@ -611,7 +642,7 @@ static void draw_clock_face(int cx, int cy, int r)
 		draw_line(cx, cy, mx, my, BLACK);
 	}
 
-	draw_box(cx-2, cy-2, cx+2, cy+2, BLACK);
+	draw_box(cx-1, cy-1, cx+1, cy+1, BLACK);
 }
 
 
@@ -673,6 +704,22 @@ void clock_draw(int flags)
 
 	epd_update_mode(flags&3);
 
+	// Nightly ghost scrub (DRAW_CLEAN, midnight): drive the panel solid black
+	// with a full refresh instead of drawing the face. A uniform black drive
+	// clears the retained ghosts that fast/partial updates leave behind; the
+	// next minute's forced full redraw (app_clock_timer_cb) restores the face.
+	if(flags&DRAW_CLEAN){
+		memset(fb_bw, 0x00, scr_h*line_bytes);
+		memset(fb_rr, 0x00, scr_h*line_bytes);
+		epd_init();
+		epd_screen_update();
+		epd_update();
+		// Deep sleep during an update causes screen corruption. Temporarily disable sleep.
+		arch_set_sleep_mode(ARCH_SLEEP_OFF);
+		epd_wait_hnd = app_easy_timer(40, epd_wait_timer);
+		return;
+	}
+
 	memset(fb_bw, 0xff, scr_h*line_bytes);
 	memset(fb_rr, 0x00, scr_h*line_bytes);
 
@@ -687,7 +734,7 @@ void clock_draw(int flags)
 		int x2 = xres*102/212, y2 = yres*101/104;
 		int face_y1 = y1 + yres*10/104; // clears the icon strip above the dial
 		int cx = (x1+x2)/2, cy = (face_y1+y2)/2;
-		int r = ((x2-x1)<(y2-face_y1) ? (x2-x1) : (y2-face_y1))/2 - 0;
+		int r = ((x2-x1)<(y2-face_y1) ? (x2-x1) : (y2-face_y1))/2 - 2;
 
 		draw_rect(x1, y1, x2, y2, BLACK);
 

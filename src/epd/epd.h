@@ -28,6 +28,10 @@ int sf_read(int addr, int len, u8 *buf);
 int selflash(int otp_boot);
 int ota_handle(u8 *buf, int len);
 
+// Boot/flash diagnostics filled in by selflash(); readable via the FF04
+// characteristic (diag_val_update()). See spi_flash.c for the byte layout.
+extern volatile u8 flash_diag[32];
+
 // epd_hw
 void epd_hw_init(u32 config0, u32 config1, int w, int h, int mode);
 void epd_hw_open(void);
@@ -122,6 +126,7 @@ void select_layout(int xres, int yres);
 #define UPDATE_FLY   2
 
 #define DRAW_BT   0x80
+#define DRAW_CLEAN 0x40
 
 extern int scr_w;
 extern int scr_h;
@@ -134,6 +139,8 @@ extern int update_mode;
 extern int detect_w;
 extern int detect_h;
 extern int detect_mode;
+extern u32 detect_config0;
+extern u32 detect_config1;
 
 
 extern int win_w;

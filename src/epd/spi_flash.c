@@ -335,16 +335,163 @@ uint32_t crc32(uint32_t crc, const void *buf, size_t size)
 extern int Region$$Table$$Base;
 void sf_dumpp(int addr, int size);
 
+// Pick the slot the booter will boot: the one with the higher generation
+// flag. The flag byte in the image header (offset 3) is interpreted with
+// signed-char semantics by both this code and the OTP booter.
+static int pick_active_image(int flag0, int flag1)
+{
+	return (flag0 >= flag1) ? 0 : 1;
+}
+
+// Compute the generation flag for a new image from the active image's flag.
+// A naive +1 overflows at 0x7f: 0x7f+1 == 0x80 == -128 as a signed char,
+// which ranks BELOW every other flag, so the booter would silently revert to
+// the old image on every reset (and re-flashing recomputes 0x80 forever).
+// Repair: once the active flag reaches 0x7f, pull the old header's flag byte
+// back to 0x01. NOR programming can only clear bits, so overwriting the byte
+// with 0x01 needs no erase. The new image then gets 0x02 and outranks it.
+// A negative (already-wrapped) active flag yields a non-positive new flag;
+// clamp that to 1 so the fresh image still outranks the wrapped old one.
+static int bump_image_flag(int active_flag, int active_hdr_addr)
+{
+	int nf = active_flag + 1;
+
+	if(nf > 0x7e || nf < 1){
+		if(active_flag >= 0x7f){
+			u8 low = 0x01;
+			sf_page_write(active_hdr_addr+3, &low, 1);
+			sf_wait();
+		}
+		nf = (nf > 0x7e) ? 2 : 1;
+	}
+
+	return nf;
+}
+
+// Boot/flash diagnostics, filled in by selflash() and exposed via the
+// readable FF04 characteristic (see diag_val_update() in user_custs1_impl.c)
+// so they can be inspected with any BLE scanner without a UART console.
+// Layout (little-endian):
+// [0..3]   otp_boot marker arg passed to selflash()
+// [4..19]  boot header @0x00000 (raw 16 bytes; describes the image the
+//          ROM/OTP booter loads when it ignores the A/B product scheme)
+// Single-image (AN-B-001) boot path:
+// [20..23] image length field from the boot header
+// [24..27] CRC32 of the flash image at offset 8
+// [28..31] size of the running image
+// A/B (product header) boot path:
+// [20..23] image0 version field (header offset 28)
+// [24..27] image1 version field (header offset 28)
+// [28..29] image0 address (low 16 bits)
+// [30..31] image1 address (low 16 bits)
+volatile u8 flash_diag[32];
+
+static void flash_diag_set(int off, u32 v)
+{
+	flash_diag[off+0] = v & 0xff;
+	flash_diag[off+1] = (v>>8) & 0xff;
+	flash_diag[off+2] = (v>>16) & 0xff;
+	flash_diag[off+3] = (v>>24) & 0xff;
+}
+
+// Program 'len' bytes from RAM 'src' to flash 'dst'. Writes are split so a
+// page never straddles a flash 256-byte page boundary -- NOR page programs
+// wrap around within the page, which would silently corrupt the tail.
+static void sf_write_mem(int dst, u8 *src, int len)
+{
+	u8 pbuf[256];
+
+	while(len>0){
+		int n = 256 - (dst & 0xff);
+		if(n>len) n = len;
+		memcpy(pbuf, src, n);
+		sf_page_write(dst, pbuf, n);
+		sf_wait();
+		dst += n; src += n; len -= n;
+	}
+}
+
+// Install the running image (RAM at 0x07fc0000) into the primary image slot
+// (product header slot 0) -- the slot the boot chain actually boots on these
+// units. Header uses the Dialog SUOTA layout: 70 51 AA <imageid>, code_size,
+// CRC, version @28, encryption @32 = 0. The generation id is set one above
+// the highest existing slot id (wrap-safe), so this image wins on booters
+// that pick slot 0 unconditionally *and* on booters that pick the highest id.
+static void selflash_install(int firm_size, u32 firm_crc, int slot0, int slot1)
+{
+	u8 pbuf[256];
+	u32 *p32 = (u32*)pbuf;
+	int f0 = -1, f1 = -1, hi, new_flag;
+
+	// Diag: [20..22] = running version (low 3 bytes), [23] = what this boot
+	// did: 0x01 = slot install ran, 0x02 = up-to-date skip; when reinstalling,
+	// bits 04/08/10/20 flag which field(s) mismatched (magic/size/crc/version).
+	flash_diag[20] = EPD_VERSION & 0xff;
+	flash_diag[21] = (EPD_VERSION>>8) & 0xff;
+	flash_diag[22] = (EPD_VERSION>>16) & 0xff;
+	flash_diag[23] = 0x00;
+	flash_diag_set(24, firm_crc);
+	flash_diag_set(28, firm_size);
+
+	// Up to date? Slot 0 already carries this exact build. While checking,
+	// record which field(s) mismatched into the diag status byte (bits 2..5)
+	// so a reinstall-every-boot problem can be diagnosed over BLE.
+	sf_read(slot0, 64, pbuf);
+	if(pbuf[0]!=0x70 || pbuf[1]!=0x51) flash_diag[23] |= 0x04;
+	if(p32[1]!=(u32)firm_size)         flash_diag[23] |= 0x08;
+	if(p32[2]!=firm_crc)               flash_diag[23] |= 0x10;
+	if(p32[7]!=EPD_VERSION)            flash_diag[23] |= 0x20;
+	if((flash_diag[23] & 0x3c)==0){
+		printk("Slots up to date.\n");
+		flash_diag[23] |= 0x02;
+		return;
+	}
+
+	flash_diag[23] |= 0x01;
+
+	printk("Install image to slot %08x (size %d)\n", slot0, firm_size);
+
+	// Generation id: one above the highest existing slot id, wrap-safe.
+	sf_read(slot0, 64, pbuf);
+	if(pbuf[0]==0x70 && pbuf[1]==0x51) f0 = (signed char)pbuf[3];
+	sf_read(slot1, 64, pbuf);
+	if(pbuf[0]==0x70 && pbuf[1]==0x51) f1 = (signed char)pbuf[3];
+	hi = (f0 >= f1) ? f0 : f1;
+	new_flag = bump_image_flag(hi, (f0 >= f1) ? slot0 : slot1);
+
+	// Erase and write only the primary slot's own region.
+	sf_erase(slot0, 64+firm_size, 1);
+
+	memset(pbuf, 0xff, 64);
+	pbuf[0] = 0x70;
+	pbuf[1] = 0x51;
+	pbuf[2] = 0xaa;
+	pbuf[3] = new_flag;
+	p32[1] = firm_size;
+	p32[2] = firm_crc;
+	p32[7] = EPD_VERSION;
+	pbuf[0x20] = 0;
+	sf_write_mem(slot0, pbuf, 64);
+
+	sf_write_mem(slot0+64, (u8*)0x07fc0000, firm_size);
+
+	printk("Slot install done.\n");
+}
+
 int selflash(int otp_boot)
 {
 	u8 pbuf[256];
 	u32 *p32 = (u32*)pbuf;
 	int image_addr[2];
-	int image_flag[2];
 
 	fspi_init();
 	int id = sf_readid();
 	printk("Flash  ID: %08x\n", id);
+
+	for(int i=0; i<4; i++){
+		flash_diag[i] = ((u8*)&otp_boot)[i];
+	}
+	sf_read(0x00000, 16, (u8*)flash_diag+4);
 
 	sf_read(0x39000, 16, pbuf);
 	printk("39000: ");
@@ -356,6 +503,13 @@ int selflash(int otp_boot)
 	if(pbuf[1]==0x01){
 		printk("EPD Gpio: %02x %02x %02x %02x %02x %02x %02x %02x\n",
 			pbuf[8], pbuf[9], pbuf[10], pbuf[11], pbuf[12], pbuf[13], pbuf[14], pbuf[15]);
+		// pbuf[8..15] = CS, ??, RST, CLK, SDI, DC, BUSY, PWR (each already
+		// encoded as the group<<4|pin byte epd_hw_init expects), so the
+		// panel's real wiring can be used instead of guessing between the
+		// hardcoded pinouts in user_app_init().
+		detect_config0 = (pbuf[15]<<24) | (pbuf[14]<<16) | (pbuf[10]<<8);
+		detect_config1 = (pbuf[13]<<24) | (pbuf[ 8]<<16) | (pbuf[11]<<8) | pbuf[12];
+		printk("EPD Pinout: %08x %08x\n", detect_config0, detect_config1);
 	}
 
 	sf_read(0x3a000, 16, pbuf);
@@ -384,7 +538,9 @@ int selflash(int otp_boot)
 
 	memset(pbuf, 0, 256);
 	if(otp_boot==0x1234a5a5){
-		// Booted from OTP. Read the product header.
+		// Booted via the OTP/ROM boot chain. Read the product header to find
+		// the image slots, then install the running firmware into the primary
+		// slot with a generation id that outranks both existing slots.
 		sf_read(0x38000, 16, pbuf);
 		if(pbuf[0]!=0x70 || pbuf[1]!=0x52){
 			printk("Build Product header ...\n");
@@ -397,64 +553,32 @@ int selflash(int otp_boot)
 		}
 		image_addr[0] = p32[1];
 		image_addr[1] = p32[2];
+		printk("Slots: %08x + %08x\n", image_addr[0], image_addr[1]);
 
-		// Read the image headers
-		sf_read(image_addr[0], 32, pbuf+0 );
-		sf_read(image_addr[1], 32, pbuf+32);
-		printk("Product iamge0: %08x:  %08x %08x %08x %08x\n", image_addr[0], __REV(p32[0]), p32[1], p32[2], p32[7]);
-		printk("        iamge1: %08x:  %08x %08x %08x %08x\n", image_addr[1], __REV(p32[8]), p32[9], p32[10],p32[15]);
+		selflash_install(firm_size, firm_crc, image_addr[0], image_addr[1]);
 
-		// Determine the id of the currently active image
-		image_flag[0] = -1;
-		image_flag[1] = -1;
-		if(pbuf[ 0]==0x70 && pbuf[ 1]==0x51 && pbuf[ 2]==0xaa){
-			image_flag[0] = (signed char)pbuf[ 3];
-		}
-		if(pbuf[32]==0x70 && pbuf[33]==0x51 && pbuf[34]==0xaa){
-			image_flag[1] = (signed char)pbuf[35];
-		}
-		int active = (image_flag[0]>=image_flag[1]) ? 0 : 1;
-		printk("Active image: %d  flag: %02x\n", active, image_flag[active]);
-		
-		if(EPD_VERSION != p32[active*8+7]){
-			// The currently running firmware differs from what's in flash;
-			// write the running firmware into the inactive image slot.
-			int new_flag = image_flag[active]+1;
-			int new_id = active^1;
-
-			// Erase flash
-			printk("Erase %08x ...\n", image_addr[new_id]);
-			sf_erase(image_addr[new_id], firm_size+64, 1);
-			// Initialize the image header
-			memset(pbuf, 0xff, 64);
-			p32[0] = (new_flag<<24)|0x00aa5170;
-			p32[1] = firm_size;
-			p32[2] = firm_crc;
-			p32[7] = EPD_VERSION;
-			pbuf[0x20] = 0;
-
-			// Write to flash
-			u8 *firm_data = (u8*)0x07fc0000;
-			int addr = image_addr[new_id];
-			for(int i=0; i<firm_size+64; i+=256){
-				if(i){
-					memcpy(pbuf, firm_data, 256);
-					firm_data += 256;
-				}else{
-					memcpy(pbuf+64, firm_data, 192);
-					firm_data += 192;
-				}
-				sf_page_write(addr, pbuf, 256);
-				sf_wait();
-				addr += 256;
-			}
-			printk("Firm update done.\n\n");
-		}
+		fspi_exit();
+		return 0;
 
 	}else{
 		// Booted from Flash. Read the boot header.
 		sf_read(0, 16, pbuf);
 		printk("Boot Header: %08x %08x\n", *(u32*)(pbuf+0), *(u32*)(pbuf+4));
+
+		// Best-effort diagnostics: expose the A/B image versions and slot
+		// addresses (product header if valid, defaults otherwise).
+		sf_read(0x38000, 12, pbuf);
+		if(pbuf[0]==0x70 && pbuf[1]==0x52){
+			image_addr[0] = p32[1];
+			image_addr[1] = p32[2];
+		}else{
+			image_addr[0] = 0x04000;
+			image_addr[1] = 0x1f000;
+		}
+		sf_read(image_addr[0]+28, 4, (u8*)flash_diag+20);
+		sf_read(image_addr[1]+28, 4, (u8*)flash_diag+24);
+		flash_diag_set(28, image_addr[0]);
+		flash_diag_set(30, image_addr[1]&0xffff);
 	}
 
 	fspi_exit();
@@ -522,8 +646,8 @@ int ota_handle(u8 *buf, int len)
 		if(pbuf[32]==0x70 && pbuf[33]==0x51 && pbuf[34]==0xaa){
 			image_flag[1] = (signed char)pbuf[35];
 		}
-		int active = (image_flag[0]>=image_flag[1]) ? 0 : 1;
-		firm_flag = image_flag[active]+1;
+		int active = pick_active_image(image_flag[0], image_flag[1]);
+		firm_flag = bump_image_flag(image_flag[active], image_addr[active]);
 		int new_id = active^1;
 
 		firm_addr = image_addr[new_id];

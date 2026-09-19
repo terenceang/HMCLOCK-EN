@@ -197,11 +197,20 @@ void user_app_init(void)
 
 	selflash(otp_boot); // Perform the self-flash operation based on the OTP boot data
 
-	// Initialize the EPD screen (2.13" black/white, 6 test points)
-	epd_hw_init(0x23200700, 0x05210006, detect_w, detect_h, detect_mode | ROTATE_3);
-	if(epd_detect()==0){  // If the screen isn't detected, try the other pinout (5 test points)
-		epd_hw_init(0x23111000, 0x07210120, detect_w, detect_h, detect_mode | ROTATE_3);
-		epd_detect();
+	// Initialize the EPD screen. Prefer the pinout read from flash by
+	// selflash() (works for any panel wiring without hardcoding); fall
+	// back to the two known pinouts (6 test points, then 5 test points)
+	// if flash didn't have a valid pinout or the panel isn't detected on it.
+	int have_flash_pinout = detect_config0 || detect_config1;
+	if(have_flash_pinout){
+		epd_hw_init(detect_config0, detect_config1, detect_w, detect_h, detect_mode | ROTATE_3);
+	}
+	if(!have_flash_pinout || epd_detect()==0){
+		epd_hw_init(0x23200700, 0x05210006, detect_w, detect_h, detect_mode | ROTATE_3);
+		if(epd_detect()==0){
+			epd_hw_init(0x23111000, 0x07210120, detect_w, detect_h, detect_mode | ROTATE_3);
+			epd_detect();
+		}
 	}
 
 	app_connection_idx = -1; // Initialize the connection index to invalid
@@ -258,6 +267,9 @@ static void app_clock_timer_cb(void)
 {
 	int adj = clock_fixup(); // Get the clock correction value
 	int update_seconds;
+	// Set for one minute after the nightly black scrub: that repaint must be
+	// a full update to restore the face over the all-black frame
+	static int scrub_next_full = 0;
 
 	if(first_timer_trigger) {
 		first_timer_trigger = 0;
@@ -281,11 +293,12 @@ static void app_clock_timer_cb(void)
 		clock_push();
 	}
 
-    // Not yet synced -- show the pairing QR code instead of the clock face,
-    // following the same advertise-burst/10-min-cycle cadence as the synced clock
-    // (stat>=2: 10-minute boundary, hour change, or day change).
+    // Not yet synced -- show the pairing QR code instead of the clock face.
+    // Unlike the synced clock's power-saving 10-minute duty cycle, redraw and
+    // re-advertise every minute here: an unpaired tag needs to stay
+    // discoverable and visibly alive, since battery life doesn't matter yet.
     if(cal_minute<0){
-        if(stat>=2){
+        if(stat>=1){
             user_app_adv_start();
             // Full refresh on the hour (stat>=3) to clear any ghosting from the
             // repeated fast BT-icon toggles; fast update otherwise.
@@ -309,6 +322,17 @@ static void app_clock_timer_cb(void)
 
 	if(stat>=3){
 		flags = DRAW_BT | UPDATE_FULL; // Needs the Bluetooth icon + a full update
+		if(stat>=4){
+			// Midnight: nightly ghost scrub. This frame is driven solid black
+			// (clock_draw's DRAW_CLEAN path); queue a forced full redraw of
+			// the face on the next minute tick.
+			flags |= DRAW_CLEAN;
+			scrub_next_full = 1;
+		}
+	}else if(scrub_next_full){
+		// Repaint the face over the black scrub frame with a full update
+		scrub_next_full = 0;
+		flags = UPDATE_FULL;
 	}else if(stat>=2){
 		flags = DRAW_BT | UPDATE_FAST; // Needs the Bluetooth icon + a fast update
 	}
@@ -366,6 +390,9 @@ void user_app_on_db_init_complete( void )
 	// Update the ADC value and print the voltage
 	int adcval = adc1_update();
 	printk("Voltage: %d\n", adcval);
+
+	// Publish boot/flash diagnostics into the readable FF04 characteristic
+	diag_val_update();
 
 	// Print and push the clock data
 	clock_print();

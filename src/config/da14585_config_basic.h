@@ -84,11 +84,12 @@
 /* If CFG_PRINTF_UART2 is defined, then serial interface logging mechanism is implented using UART2, else UART1 */
 /* will be used.                                                                                                */
 /****************************************************************************************************************/
-// Left undefined, matching the 531/535 configs: this app's printk() calls are
-// unconditional (not gated behind CFG_DEVELOPMENT_DEBUG) and run on nearly
-// every clock tick, so a live UART TX here blocks entry to extended sleep on
-// every tick that logs. Define this locally if serial debug output is needed.
-#undef  CFG_PRINTF
+// Debug build: UART console enabled for diagnosing the flash/OTP boot state.
+// Note: this app's printk() calls are unconditional (not gated behind
+// CFG_DEVELOPMENT_DEBUG) and run on nearly every clock tick, so a live UART
+// TX here blocks entry to extended sleep on every tick that logs -- remove
+// this define again for power measurements.
+#define CFG_PRINTF
 
 #ifdef CFG_PRINTF
     #define CFG_PRINTF_UART2

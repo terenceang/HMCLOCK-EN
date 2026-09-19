@@ -62,6 +62,7 @@ static const uint16_t custs1_svc1     = 0xff00;
 static const uint16_t svc1_ctrl_point = 0xff03;
 static const uint16_t svc1_adc_val1   = 0xff02;
 static const uint16_t svc1_long_value = 0xff01;
+static const uint16_t svc1_diag_val   = 0xff04;
 
 // Attribute specifications
 static const uint16_t att_decl_svc       = ATT_DECL_PRIMARY_SERVICE;
@@ -107,6 +108,12 @@ const struct attm_desc_128 custs1_att_db[CUSTS1_IDX_NB] =
     // Long Value Characteristic Value
     [SVC1_IDX_LONG_VALUE_VAL]          = {(uint8_t*)&svc1_long_value, ATT_UUID_16_LEN, PERM(RD, ENABLE) | PERM(WR, ENABLE) | PERM(WRITE_REQ, ENABLE),
                                             DEF_SVC1_LONG_VALUE_CHAR_LEN, 0, 0},
+
+    // Diagnostics Value Characteristic Declaration
+    [SVC1_IDX_DIAG_VAL_CHAR]           = {(uint8_t*)&att_decl_char, ATT_UUID_16_LEN, PERM(RD, ENABLE), 0, 0, NULL},
+    // Diagnostics Value Characteristic Value (boot/flash state from selflash(), see spi_flash.c)
+    [SVC1_IDX_DIAG_VAL_VAL]            = {(uint8_t*)&svc1_diag_val, ATT_UUID_16_LEN, PERM(RD, ENABLE),
+                                            DEF_SVC1_DIAG_VAL_CHAR_LEN, 0, 0},
 };
 
 /// @} USER_CONFIG

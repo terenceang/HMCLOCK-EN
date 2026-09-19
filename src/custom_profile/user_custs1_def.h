@@ -60,6 +60,7 @@
 #define DEF_SVC1_CTRL_POINT_CHAR_LEN     1
 #define DEF_SVC1_ADC_VAL_1_CHAR_LEN      2
 #define DEF_SVC1_LONG_VALUE_CHAR_LEN     160
+#define DEF_SVC1_DIAG_VAL_CHAR_LEN       32
 
 
 /// Custom1 Service Data Base Characteristic enum
@@ -76,6 +77,9 @@ enum
 
     SVC1_IDX_LONG_VALUE_CHAR,
     SVC1_IDX_LONG_VALUE_VAL,
+
+    SVC1_IDX_DIAG_VAL_CHAR,
+    SVC1_IDX_DIAG_VAL_VAL,
 
     CUSTS1_IDX_NB
 };

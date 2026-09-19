@@ -17,6 +17,8 @@ int lut_size;
 int detect_w = 104;
 int detect_h = 212;
 int detect_mode = EPD_BW;
+u32 detect_config0 = 0;
+u32 detect_config1 = 0;
 
 
 // Window parameters
@@ -417,16 +419,20 @@ void epd_screen_clean(int mode)
 
 int epd_detect(void)
 {
-	int retv = 0;
+	int retv;
 
 	epd_hw_open();
 	epd_reset(1);
 	epd_cmd(0x12); // SWRESET
 	if(epd_busy()){
 		epd_wait();
-		epd_lut_size();
-		retv = 1;
 	}
+	// Verify the pinout by round-tripping the LUT register: a real controller
+	// echoes back what we just wrote, while wrong/unconnected pins read back
+	// zeros. Can't gate on epd_busy() alone -- its pull-up (added for leakage)
+	// means the pin reads "busy" even with no panel or the wrong pins wired,
+	// so it would report every guess as a hit.
+	retv = (epd_lut_size() > 0);
 	epd_hw_close();
 	return retv;
 }
