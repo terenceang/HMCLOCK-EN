@@ -156,15 +156,6 @@
             </div>
           </div>
           <div class="flex items-center gap-3">
-            <div class="w-10 h-10 shrink-0 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-              <i class="fa fa-code-fork"></i>
-            </div>
-            <div>
-              <p class="text-gray-500 dark:text-slate-400 text-sm">Firmware Version</p>
-              <p id="firmware_version" class="font-normal text-gray-500 dark:text-slate-400">--</p>
-            </div>
-          </div>
-          <div class="flex items-center gap-3">
             <div class="w-10 h-10 shrink-0 rounded-full bg-warning/10 flex items-center justify-center text-warning">
               <i class="fa fa-bolt"></i>
             </div>
@@ -326,6 +317,7 @@
         <h2 id="h-firmware" class="font-semibold text-gray-700 dark:text-slate-200 flex items-center gap-2">
           <i class="fa fa-microchip text-primary"></i> Firmware
         </h2>
+        <p class="text-sm text-gray-600 dark:text-slate-400">Current version: <span id="firmware_version" class="font-normal text-gray-500 dark:text-slate-400">--</span></p>
         <p class="text-sm text-gray-600 dark:text-slate-400">Flash a firmware .bin file to the clock. Keep it connected and powered until the update finishes.</p>
         <button id="upfirm-button" title="Connect to the clock first" class="bg-accent text-white px-5 py-2.5 rounded-lg flex items-center justify-center gap-2 btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
           <i class="fa fa-refresh"></i> Firmware Update
