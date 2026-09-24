@@ -31,6 +31,7 @@ int img_begin(int xres, int yres);
 int img_chunk(int seq, u8 *d, int n);
 int img_end(u32 crc);
 void img_abort(void);
+int img_present(int xres, int yres);
 int img_render(int xres, int yres);
 int img_mode_get(void);
 void img_mode_set(int mode);

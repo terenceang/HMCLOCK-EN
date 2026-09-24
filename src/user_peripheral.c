@@ -407,7 +407,7 @@ void user_app_on_db_init_complete( void )
 	// Restore the persisted mode: the uploaded image if one is stored, else the
 	// pairing screen (the clock is not synced after a reset)
 	display_mode = img_mode_get();
-	if(display_mode!=1 || image_draw()!=0){
+	if(display_mode!=1 || image_draw(0)!=0){
 		display_mode = 0;
 		QR_draw(UPDATE_FULL);
 	}
@@ -445,8 +445,10 @@ void user_app_adv_start(void)
 	vbuf[3] = (EPD_VERSION>>8)&0xff;
 	app_add_ad_struct(cmd, vbuf, vbuf[0]+1, 1);
 
-	// Start undirected advertising with a timeout
-	app_easy_gap_undirected_advertise_with_timeout_start(user_default_hnd_conf.advertise_period, NULL);
+	// Start undirected advertising with a timeout: a longer window until the clock
+	// has been synced for the first time (cal_minute<0), the normal burst after
+	app_easy_gap_undirected_advertise_with_timeout_start(
+		cal_minute<0 ? MS_TO_TIMERUNITS(30000) : user_default_hnd_conf.advertise_period, NULL);
 	printk("\nuser_app_adv_start! %s\n", adv_name+2);
 }
 

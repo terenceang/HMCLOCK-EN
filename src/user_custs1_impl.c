@@ -486,6 +486,10 @@ void select_layout(int xres, int yres)
  * 3. Close the hardware interface
  * 4. Put the system into extended sleep mode
  */
+// Set while a clean-up refresh is running; the picture is painted when it finishes
+static int image_pending = 0;
+static void image_paint(void);
+
 static void epd_wait_timer(void)
 {
     if(epd_busy()){
@@ -502,6 +506,10 @@ static void epd_wait_timer(void)
         epd_hw_close();
         // Put the system into extended sleep mode
         arch_set_sleep_mode(ARCH_EXT_SLEEP_ON);
+        if(image_pending){
+            image_pending = 0;
+            image_paint();
+        }
     }
 }
 
@@ -789,18 +797,41 @@ void clock_draw(int flags)
 	epd_commit();
 }
 
-// Draw the uploaded image from flash. Returns 0 on success, -1 if none is stored.
-int image_draw(void)
+// Render the stored image and refresh the panel with it
+static void image_paint(void)
 {
 	LAYOUT *lt = &layouts[current_layout];
 
 	fb_clear();
 	if(img_render(lt->xres, lt->yres)!=0){
-		return -1;
+		return;
 	}
 	epd_hw_open();
 	epd_update_mode(UPDATE_FULL);
 	epd_commit();
+}
+
+// Draw the uploaded image from flash. Returns 0 on success, -1 if none is stored.
+// clean=1: drawing over other content garbles the panel (half-driven pixels), so
+// first drive it solid black (fast refresh) and paint the picture, with a full
+// refresh, when that update completes.
+int image_draw(int clean)
+{
+	LAYOUT *lt = &layouts[current_layout];
+
+	if(!img_present(lt->xres, lt->yres)){
+		return -1;
+	}
+	if(clean){
+		memset(fb_bw, 0x00, scr_h*line_bytes);
+		memset(fb_rr, 0x00, scr_h*line_bytes);
+		epd_hw_open();
+		epd_update_mode(UPDATE_FAST);	// fast waveform: ~1/3 the time of a full refresh
+		image_pending = 1;
+		epd_commit();
+	}else{
+		image_paint();
+	}
 	return 0;
 }
 
@@ -830,7 +861,7 @@ void image_cmd(const uint8_t *v, int len)
 	if(v[0]==0x93){
 		if(len<2) return;
 		if(v[1]==1){
-			if(image_draw()==0){
+			if(image_draw(1)==0){
 				display_mode = 1;
 				img_mode_set(1);
 			}
@@ -839,9 +870,12 @@ void image_cmd(const uint8_t *v, int len)
 			img_mode_set(0);
 			clock_mode_draw();
 		}
+		clock_push();	// refresh the readable status (mode) for the web app
 	}else if(v[0]==0x94){
 		if(len<5) return;
 		if((v[1]|v[2]<<8)!=lt->xres || (v[3]|v[4]<<8)!=lt->yres) return;
+		// The old image is erased from here on, so it no longer counts as the mode
+		display_mode = 0;
 		img_begin(lt->xres, lt->yres);
 	}else if(v[0]==0x95){
 		if(len<4) return;
@@ -851,8 +885,9 @@ void image_cmd(const uint8_t *v, int len)
 		if(img_end(v[1]|v[2]<<8|v[3]<<16|(u32)v[4]<<24)==0){
 			display_mode = 1;
 			img_mode_set(1);
-			image_draw();
+			image_draw(1);
 		}
+		clock_push();	// report the result (mode byte) to the web app
 	}
 }
 

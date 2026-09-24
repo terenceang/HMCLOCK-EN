@@ -20,6 +20,18 @@ This project utilizes discarded **Hema Electronic Shelf Label (ESL)** hardware f
 
 ## Changelog
 
+### 0xA50f0015
+
+* The clean-up frame that precedes an image draw now uses the fast waveform instead of a full refresh, shortening an image change to roughly one full refresh plus a fast one.
+
+### 0xA50f0014
+
+* **Fixed the image being garbled when drawn over other panel content.** A picture painted directly over the clock face (or a previous picture) left half-driven, noisy pixels, while a cold boot or a draw after the clock looked fine. Showing or uploading an image now first drives the panel solid black with a full refresh (the same reset used by the nightly scrub) and paints the picture when that finishes, so an image change takes two refreshes (about twice as long). The boot-time restore is unchanged.
+
+### 0xA50f0013
+
+* The advertising window before the first time sync is now 30 s (was 15 s), on cold boot and on each per-minute restart while unsynced, giving more time to connect. After the first sync the 15 s burst is unchanged.
+
 ### 0xA50f0012
 
 * **New image display mode, mutually exclusive with the analog clock + calendar.** The web app can now convert any picture to the panel size (letterboxed, Floyd-Steinberg dithered, 1-bit black & white) and upload it; the device stores it in SPI flash (`0x3B000-0x3EFFF`, clear of the firmware slots) and shows it until you switch back. The chosen mode and image survive power loss. In image mode the minute timer keeps the time but no longer redraws the panel (no nightly scrub either); low-battery shutdown still applies.

@@ -848,6 +848,17 @@ static int img_valid(int xres, int yres, img_hdr_t *h)
 		&& h->len==img_stride(xres)*yres;
 }
 
+// Is a valid image of exactly xres*yres stored?
+int img_present(int xres, int yres)
+{
+	img_hdr_t h;
+
+	fspi_init();
+	int ok = img_valid(xres, yres, &h);
+	fspi_exit();
+	return ok;
+}
+
 // Draw the stored image into the framebuffer (caller clears it first).
 // Returns 0 on success, -1 if no valid image is stored.
 int img_render(int xres, int yres)

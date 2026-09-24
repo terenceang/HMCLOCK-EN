@@ -88,7 +88,7 @@
 extern char *bt_id;
 extern int ota_state;
 extern int display_mode;          // 0 = clock, 1 = uploaded image
-int image_draw(void);
+int image_draw(int clean);
 void image_cmd(const uint8_t *v, int len);
 
 
