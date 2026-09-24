@@ -156,6 +156,15 @@
             </div>
           </div>
           <div class="flex items-center gap-3">
+            <div class="w-10 h-10 shrink-0 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+              <i class="fa fa-code-fork"></i>
+            </div>
+            <div>
+              <p class="text-gray-500 dark:text-slate-400 text-sm">Firmware Version</p>
+              <p id="firmware_version" class="font-normal text-gray-500 dark:text-slate-400">--</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
             <div class="w-10 h-10 shrink-0 rounded-full bg-warning/10 flex items-center justify-center text-warning">
               <i class="fa fa-bolt"></i>
             </div>
@@ -757,6 +766,15 @@
         setValueStyle('current_voltage', false);
         setBattery(volts);
 
+        // Running firmware version: low 16 bits of EPD_VERSION, FF04 bytes 20..21
+        // (same number the flash dialog shows as "v<n>"); older firmware has no FF04
+        try {
+          const diag = await service.getCharacteristic(0xff04);
+          const dv = await diag.readValue();
+          document.getElementById('firmware_version').textContent = 'v' + dv.getUint16(20, true);
+          setValueStyle('firmware_version', false);
+        } catch (e) { console.log('No firmware version available:', e); }
+
         let cur_time = await longValue.readValue();
         let year = cur_time.getUint16(0, true),
             month = cur_time.getUint8(2),
@@ -1048,7 +1066,8 @@
       document.getElementById('current_voltage').textContent = "--.- V";
       document.getElementById('current_time').textContent = "--:--:--";
       document.getElementById('time_drift').textContent = "";
-      ['device_name', 'current_voltage', 'current_time'].forEach(id => setValueStyle(id, true));
+      document.getElementById('firmware_version').textContent = "--";
+      ['device_name', 'firmware_version', 'current_voltage', 'current_time'].forEach(id => setValueStyle(id, true));
       document.getElementById('battery-bar').classList.add('hidden');
       document.getElementById('battery-note').textContent = '';
       deviceMode = null;
