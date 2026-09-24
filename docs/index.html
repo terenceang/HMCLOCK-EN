@@ -450,10 +450,7 @@
     function updateSystemTime() {
       const now = new Date();
       // Same format as the device time so the two can be compared at a glance
-      document.getElementById('system_time').textContent = formatTime(
-        now.getFullYear(), now.getMonth(), now.getDate(),
-        now.getHours(), now.getMinutes(), now.getSeconds()
-      );
+      document.getElementById('system_time').textContent = formatTime(now);
 
       // Drive the card view from system time when no device is connected
       if (!deviceTimeBase) {
@@ -469,6 +466,13 @@
     const logWindow = document.getElementById('log-window');
     const clearLogBtn = document.getElementById('clear-log-btn');
 
+    const LOG_STYLES = {
+      success: ['fa-check-circle',         'text-green-400',  'text-green-300'],
+      error:   ['fa-exclamation-circle',   'text-red-400',    'text-red-300'],
+      warning: ['fa-exclamation-triangle', 'text-yellow-400', 'text-yellow-300'],
+      info:    ['fa-info-circle',          'text-blue-400',   'text-gray-300']
+    };
+
     // Custom log function
     function log(message, type = 'info') {
       const timestamp = new Date().toLocaleTimeString('en-US', {
@@ -481,27 +485,8 @@
       logLine.className = 'log-entry mb-1 border-b border-gray-800 pb-1';
       logLine.dataset.type = type;
 
-      let typeIcon = '';
-      let typeColor = '';
-
-      switch(type) {
-        case 'success':
-          typeIcon = '<span class="text-green-400 mr-1"><i class="fa fa-check-circle"></i></span>';
-          typeColor = 'text-green-300';
-          break;
-        case 'error':
-          typeIcon = '<span class="text-red-400 mr-1"><i class="fa fa-exclamation-circle"></i></span>';
-          typeColor = 'text-red-300';
-          break;
-        case 'warning':
-          typeIcon = '<span class="text-yellow-400 mr-1"><i class="fa fa-exclamation-triangle"></i></span>';
-          typeColor = 'text-yellow-300';
-          break;
-        case 'info':
-        default:
-          typeIcon = '<span class="text-blue-400 mr-1"><i class="fa fa-info-circle"></i></span>';
-          typeColor = 'text-gray-300';
-      }
+      const [icon, iconColor, typeColor] = LOG_STYLES[type] || LOG_STYLES.info;
+      const typeIcon = `<span class="${iconColor} mr-1"><i class="fa ${icon}"></i></span>`;
 
       logLine.innerHTML = `<span class="text-gray-500 mr-2">[${timestamp}]</span>${typeIcon}<span class="${typeColor}"></span>`;
       logLine.lastElementChild.textContent = message;  // textContent: log text may carry device/error strings
@@ -664,9 +649,9 @@
     var deviceTimeBase = null;     // device time baseline
 
     // Format time for display
-    function formatTime(year, month, mday, hour, min, sec) {
-      month += 1;
-      return `${year}-${month.toString().padStart(2, '0')}-${mday.toString().padStart(2, '0')} ${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+    function formatTime(d) {
+      const p = n => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
     }
 
     // Update device time display (derives the current device time from the baseline)
@@ -674,10 +659,7 @@
       if (!deviceTimeBase) return;
 
       const t = deviceCurrentTime();
-      document.getElementById('current_time').textContent = formatTime(
-        t.getFullYear(), t.getMonth(), t.getDate(),
-        t.getHours(), t.getMinutes(), t.getSeconds()
-      );
+      document.getElementById('current_time').textContent = formatTime(t);
 
       const drift = Math.round((t - new Date()) / 1000);
       const driftEl = document.getElementById('time_drift');
@@ -768,11 +750,11 @@
         let adc1Value = await service.getCharacteristic(0xff02);
         longValue = await service.getCharacteristic(0xff01);
 
-        let cur_voltage = await adc1Value.readValue();
-        console.log('Current voltage:', cur_voltage.getUint16(0, true) / 1000 + 'V');
-        document.getElementById('current_voltage').textContent = (cur_voltage.getUint16(0, true) / 1000).toFixed(2) + ' V';
+        const volts = (await adc1Value.readValue()).getUint16(0, true) / 1000;
+        console.log('Current voltage:', volts + 'V');
+        document.getElementById('current_voltage').textContent = volts.toFixed(2) + ' V';
         setValueStyle('current_voltage', false);
-        setBattery(cur_voltage.getUint16(0, true) / 1000);
+        setBattery(volts);
 
         let cur_time = await longValue.readValue();
         let year = cur_time.getUint16(0, true),
@@ -793,10 +775,7 @@
         }
 
         // Save the device time baseline and current timestamp
-        deviceTimeBase = {
-          year, month, mday, hour, minute, second,
-          timestamp: new Date()
-        };
+        deviceTimeBase = { year, month, mday, hour, minute, second, timestamp: new Date() };
 
         // Update the device time display immediately
         updateDeviceTime();
@@ -806,7 +785,6 @@
         if (deviceTimeInterval) clearInterval(deviceTimeInterval);
         deviceTimeInterval = setInterval(updateDeviceTime, 1000);
 
-        renderPreview();
         checkSavedImage();
         connected = true;
         setDeviceButtonsEnabled(true);
@@ -848,10 +826,7 @@
         await longValue.writeValue(buf);
 
         // Update the device time baseline
-        deviceTimeBase = {
-          year, month: month, mday, hour, minute, second,
-          timestamp: new Date()
-        };
+        deviceTimeBase = { year, month, mday, hour, minute, second, timestamp: new Date() };
 
         // Update the device time display immediately
         updateDeviceTime();
@@ -865,16 +840,6 @@
         setimeButton.innerHTML = '<i class="fa fa-clock-o"></i> Sync Time';
         setimeButton.disabled = false;
       }
-    }
-
-    // File reading helper
-    function readFileAsArrayBuffer(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsArrayBuffer(file);
-      });
     }
 
     // Firmware signature search
@@ -915,7 +880,7 @@
       try {
         const file = await pickFile('.bin');
         if (!file) return;
-        firm_buf = new Uint8Array(await readFileAsArrayBuffer(file));
+        firm_buf = new Uint8Array(await file.arrayBuffer());
         firm_size = file.size;
       } catch (err) {
         notify('Could not read that file: ' + (err.message || err), 'error');
@@ -1231,6 +1196,12 @@
       }
     }
 
+    // Status line under the picture plus a toast (used for upload outcomes)
+    function imageResult(text, kind) {
+      setImageStatus(text, kind);
+      toast(text, kind || 'info');
+    }
+
     function setImageStatus(text, kind) {
       const el = document.getElementById('image_status');
       const color = { error: 'text-red-600 dark:text-red-400', success: 'text-green-700 dark:text-green-400' };
@@ -1462,16 +1433,13 @@
         const ok = v.byteLength >= 16 && v.getUint8(15) == 1;
         imageSent = ok;
         if (v.byteLength >= 16) showMode(v.getUint8(15));
-        setImageStatus(ok ? 'Image uploaded and displayed.' : 'Upload failed (CRC/length mismatch) - try again.', ok ? 'success' : 'error');
-        toast(ok ? 'Image uploaded and displayed.' : 'Upload failed (CRC/length mismatch) - try again.', ok ? 'success' : 'error');
+        imageResult(ok ? 'Image uploaded and displayed.' : 'Upload failed (CRC/length mismatch) - try again.', ok ? 'success' : 'error');
       } catch (error) {
         if (error.message === 'cancelled') {
-          setImageStatus('Upload cancelled.');
-          toast('Upload cancelled.', 'info');
+          imageResult('Upload cancelled.');
         } else {
           console.log('Image upload failed:', error);
-          setImageStatus('Upload failed: ' + (error.message || error), 'error');
-          toast('Upload failed: ' + (error.message || error), 'error');
+          imageResult('Upload failed: ' + (error.message || error), 'error');
         }
       } finally {
         progressContainer.classList.add('hidden');
