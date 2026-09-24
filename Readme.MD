@@ -2,6 +2,8 @@
 
 This is a fork of the original [HMCLOCK](https://github.com/tpunix/HMCLOCK) project by [tpunix](https://github.com/tpunix).
 
+Fork maintained by Terence Ang - motionfxdesign.
+
 ---
 
 ![Device Showcase](./images/device.png)
