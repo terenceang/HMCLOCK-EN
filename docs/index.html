@@ -210,6 +210,33 @@
         </div>
       </div>
 
+      <!-- Display mode: analog clock + calendar, or an uploaded picture (mutually exclusive) -->
+      <div class="p-4 bg-gray-50 dark:bg-slate-900/60 rounded-lg border border-gray-100 dark:border-slate-700 space-y-3">
+        <div class="flex justify-between items-center">
+          <h3 class="font-semibold text-gray-700 dark:text-slate-300 flex items-center gap-2">
+            <i class="fa fa-picture-o text-primary"></i> Display Mode
+          </h3>
+          <span class="text-sm text-gray-500 dark:text-slate-400">Current: <span id="mode_label" class="font-semibold">--</span></span>
+        </div>
+        <div class="flex flex-wrap gap-3">
+          <button id="mode-clock-button" class="bg-primary text-white px-4 py-2 rounded-lg btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
+            <i class="fa fa-clock-o"></i> Clock + Calendar
+          </button>
+          <button id="mode-image-button" class="bg-primary text-white px-4 py-2 rounded-lg btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
+            <i class="fa fa-picture-o"></i> Show Stored Image
+          </button>
+          <label class="bg-slate-600 text-white px-4 py-2 rounded-lg btn-hover font-medium cursor-pointer">
+            <i class="fa fa-folder-open-o"></i> Choose Image
+            <input id="image-file" type="file" accept="image/*" class="hidden">
+          </label>
+          <button id="image-upload-button" class="bg-accent text-white px-4 py-2 rounded-lg btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
+            <i class="fa fa-upload"></i> Upload Image
+          </button>
+        </div>
+        <canvas id="image-preview" class="hidden border border-gray-300 dark:border-slate-600 max-w-full" style="image-rendering:pixelated"></canvas>
+        <p id="image_status" class="text-xs text-gray-500 dark:text-slate-400">Choose a picture; it is scaled to the panel and converted to black &amp; white. Uploading it switches the display to image mode.</p>
+      </div>
+
       <!-- Progress bar -->
       <div id="progress-container" class="hidden">
         <p class="text-sm font-medium text-gray-600 dark:text-slate-300 mb-1">Firmware Update Progress</p>
@@ -440,7 +467,10 @@
     const deviceButtons = [
       document.getElementById('setime-button'),
       document.getElementById('upfirm-button'),
-      document.getElementById('calibration-button')
+      document.getElementById('calibration-button'),
+      document.getElementById('mode-clock-button'),
+      document.getElementById('mode-image-button'),
+      document.getElementById('image-upload-button')
     ];
 
     function setDeviceButtonsEnabled(enabled) {
@@ -553,6 +583,16 @@
             hour = cur_time.getUint8(4),
             minute = cur_time.getUint8(5),
             second = cur_time.getUint8(6);
+
+        // Newer firmware also reports the panel size and display mode
+        if (cur_time.byteLength >= 16) {
+          panelW = cur_time.getUint16(11, true);
+          panelH = cur_time.getUint16(13, true);
+          showMode(cur_time.getUint8(15));
+        } else {
+          panelW = panelH = 0;
+          setImageStatus('This firmware does not support image mode - update the firmware first.');
+        }
 
         // Save the device time baseline and current timestamp
         deviceTimeBase = {
@@ -890,7 +930,133 @@
 
     checkBluetoothAvailability();
 
+    // ---- Display mode / image upload ----
+    let panelW = 0, panelH = 0;   // panel size reported by the device (landscape)
+    let imageBits = null;         // 1bpp bitmap ready to upload (row-major, MSB first, 1 = white)
+
+    function setImageStatus(text) {
+      document.getElementById('image_status').textContent = text;
+    }
+
+    function showMode(mode) {
+      document.getElementById('mode_label').textContent = mode == 1 ? 'Image' : 'Clock + Calendar';
+    }
+
+    async function setMode(mode) {
+      await longValue.writeValue(new Uint8Array([0x93, mode]));
+      // Read back what the device actually ended up in (image mode needs a stored image)
+      const v = await longValue.readValue();
+      if (v.byteLength >= 16) showMode(v.getUint8(15));
+      if (mode == 1 && v.byteLength >= 16 && v.getUint8(15) != 1) setImageStatus('No stored image - upload one first.');
+    }
+
+    // Scale the picture to the panel (letterboxed on white), dither to 1 bit
+    // (Floyd-Steinberg), show the result in the preview and keep the packed bits
+    function convertImage(img) {
+      const w = panelW, h = panelH;
+      const canvas = document.getElementById('image-preview');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, w, h);
+      const scale = Math.min(w / img.width, h / img.height);
+      const dw = img.width * scale, dh = img.height * scale;
+      ctx.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh);
+
+      const px = ctx.getImageData(0, 0, w, h);
+      const d = px.data;
+      const g = new Float32Array(w * h);
+      for (let i = 0; i < w * h; i++) g[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2];
+
+      const stride = (w + 7) >> 3;
+      const bits = new Uint8Array(stride * h);
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const i = y * w + x, old = g[i], v = old < 128 ? 0 : 255, err = old - v;
+          if (x + 1 < w) g[i + 1] += err * 7 / 16;
+          if (y + 1 < h) {
+            if (x > 0) g[i + w - 1] += err * 3 / 16;
+            g[i + w] += err * 5 / 16;
+            if (x + 1 < w) g[i + w + 1] += err / 16;
+          }
+          if (v) bits[y * stride + (x >> 3)] |= 0x80 >> (x & 7);
+          d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = v;
+        }
+      }
+      ctx.putImageData(px, 0, 0);
+      canvas.classList.remove('hidden');
+      imageBits = bits;
+    }
+
+    function onImageChosen(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      if (!panelW) {
+        setImageStatus('Connect to the device first (the picture is sized to its panel).');
+        return;
+      }
+      const img = new Image();
+      img.onload = () => {
+        convertImage(img);
+        URL.revokeObjectURL(img.src);
+        setImageStatus('Converted to ' + panelW + 'x' + panelH + ' black & white. Click Upload Image to send it.');
+      };
+      img.onerror = () => setImageStatus('Could not read that file as an image.');
+      img.src = URL.createObjectURL(file);
+    }
+
+    async function onImageUpload() {
+      if (!imageBits) {
+        setImageStatus('Choose an image first.');
+        return;
+      }
+      const button = document.getElementById('image-upload-button');
+      setButtonEnabled(button, false);
+      try {
+        let buf = new Uint8Array(5);
+        let view = new DataView(buf.buffer);
+        buf[0] = 0x94;
+        view.setUint16(1, panelW, true);
+        view.setUint16(3, panelH, true);
+        await longValue.writeValue(buf);
+
+        const CHUNK = 128;
+        for (let off = 0, seq = 0; off < imageBits.length; off += CHUNK, seq++) {
+          const part = imageBits.subarray(off, off + CHUNK);
+          buf = new Uint8Array(3 + part.length);
+          buf[0] = 0x95;
+          buf[1] = seq & 0xff;
+          buf[2] = seq >> 8;
+          buf.set(part, 3);
+          await longValue.writeValue(buf);
+          setImageStatus('Uploading... ' + Math.round((off + part.length) * 100 / imageBits.length) + '%');
+        }
+
+        buf = new Uint8Array(5);
+        view = new DataView(buf.buffer);
+        buf[0] = 0x96;
+        view.setUint32(1, CRC32.buf(imageBits) >>> 0, true);
+        await longValue.writeValue(buf);
+
+        // The device switches to image mode only if the CRC matched
+        const v = await longValue.readValue();
+        const ok = v.byteLength >= 16 && v.getUint8(15) == 1;
+        if (v.byteLength >= 16) showMode(v.getUint8(15));
+        setImageStatus(ok ? 'Image uploaded and displayed.' : 'Upload failed (CRC/length mismatch) - try again.');
+      } catch (error) {
+        console.log('Image upload failed:', error);
+        setImageStatus('Upload failed: ' + (error.message || error));
+      } finally {
+        if (connected) setButtonEnabled(button, true);
+      }
+    }
+
     // Event bindings
+    document.getElementById('mode-clock-button').addEventListener('click', () => setMode(0));
+    document.getElementById('mode-image-button').addEventListener('click', () => setMode(1));
+    document.getElementById('image-file').addEventListener('change', onImageChosen);
+    document.getElementById('image-upload-button').addEventListener('click', onImageUpload);
     document.getElementById('connect-button').addEventListener('click', onClick);
     document.getElementById('setime-button').addEventListener('click', onSetTime);
     document.getElementById('upfirm-button').addEventListener('click', onUpdate);
