@@ -103,34 +103,83 @@
       </div>
     </header>
 
-    <!-- Main content card -->
-    <div class="card-effect p-5 md:p-6 space-y-6">
-      <!-- Control buttons -->
-      <div class="grid grid-cols-2 sm:flex sm:flex-wrap gap-3 md:gap-4">
-        <!-- Starts disabled; enabled only once a Bluetooth adapter is confirmed present -->
-        <button id="connect-button" class="col-span-2 sm:col-span-1 bg-primary text-white px-5 py-2.5 rounded-lg flex items-center justify-center gap-2 btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
-          <i class="fa fa-bluetooth"></i> Connect Device
-        </button>
-        <button id="setime-button" title="Connect to the clock first" class="bg-warning text-white px-5 py-2.5 rounded-lg flex items-center justify-center gap-2 btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
-          <i class="fa fa-clock-o"></i> Sync Time
-        </button>
-        <button id="upfirm-button" title="Connect to the clock first" class="bg-accent text-white px-5 py-2.5 rounded-lg flex items-center justify-center gap-2 btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
-          <i class="fa fa-refresh"></i> Firmware Update
-        </button>
-        <button id="calibration-button" title="Connect to the clock first" class="col-span-2 sm:col-span-1 bg-secondary text-white px-5 py-2.5 rounded-lg flex items-center justify-center gap-2 btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
-          <i class="fa fa-wrench"></i> Time Calibration
-        </button>
-      </div>
+    <div class="space-y-5">
+      <!-- Connection -->
+      <section class="card-effect p-5 space-y-4" aria-labelledby="h-connection">
+        <h2 id="h-connection" class="font-semibold text-gray-700 dark:text-slate-200 flex items-center gap-2">
+          <i class="fa fa-bluetooth text-primary"></i> Connection
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-[auto_1fr_1fr] items-center gap-4">
+          <!-- Starts disabled; enabled only once a Bluetooth adapter is confirmed present -->
+          <button id="connect-button" class="bg-primary text-white px-5 py-2.5 rounded-lg flex items-center justify-center gap-2 btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
+            <i class="fa fa-bluetooth"></i> Connect Device
+          </button>
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 shrink-0 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+              <i class="fa fa-microchip"></i>
+            </div>
+            <div>
+              <p class="text-gray-500 dark:text-slate-400 text-sm">Device Name</p>
+              <p id="device_name" class="font-semibold">Not Connected</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 shrink-0 rounded-full bg-warning/10 flex items-center justify-center text-warning">
+              <i class="fa fa-bolt"></i>
+            </div>
+            <div>
+              <p class="text-gray-500 dark:text-slate-400 text-sm">Current Voltage</p>
+              <p id="current_voltage" class="font-semibold">--.- V</p>
+            </div>
+          </div>
+        </div>
 
-      <!-- Bluetooth availability / connection error banner -->
-      <div id="bt-status" class="hidden" role="alert"></div>
+        <!-- Bluetooth availability / connection error banner -->
+        <div id="bt-status" class="hidden" role="alert"></div>
+      </section>
 
-      <!-- Preview: the one place that shows what the clock displays (clock + calendar, or the picture) -->
-      <div class="p-4 bg-gray-50 dark:bg-slate-900/60 rounded-lg border border-gray-100 dark:border-slate-700 space-y-4">
+      <!-- Time -->
+      <section class="card-effect p-5 space-y-4" aria-labelledby="h-time">
+        <h2 id="h-time" class="font-semibold text-gray-700 dark:text-slate-200 flex items-center gap-2">
+          <i class="fa fa-clock-o text-primary"></i> Time
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 shrink-0 rounded-full bg-secondary/10 flex items-center justify-center text-secondary">
+              <i class="fa fa-calendar"></i>
+            </div>
+            <div>
+              <p class="text-gray-500 dark:text-slate-400 text-sm">Device Time</p>
+              <p id="current_time" class="font-semibold">--:--:--</p>
+              <p id="time_drift" class="text-xs text-gray-500 dark:text-slate-400"></p>
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 shrink-0 rounded-full bg-accent/10 flex items-center justify-center text-accent">
+              <i class="fa fa-laptop"></i>
+            </div>
+            <div>
+              <p class="text-gray-500 dark:text-slate-400 text-sm">System Time</p>
+              <p id="system_time" class="font-semibold">Loading...</p>
+            </div>
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-3">
+          <button id="setime-button" title="Connect to the clock first" class="bg-warning text-white px-5 py-2.5 rounded-lg flex items-center justify-center gap-2 btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
+            <i class="fa fa-clock-o"></i> Sync Time
+          </button>
+          <button id="calibration-button" title="Connect to the clock first" class="bg-secondary text-white px-5 py-2.5 rounded-lg flex items-center justify-center gap-2 btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
+            <i class="fa fa-wrench"></i> Time Calibration
+          </button>
+        </div>
+      </section>
+
+      <!-- Display: one preview of what the clock shows (clock + calendar, or the picture) -->
+      <section class="card-effect p-5 space-y-4" aria-labelledby="h-display">
         <div class="flex flex-wrap justify-between items-center gap-3">
-          <h3 class="font-semibold text-gray-700 dark:text-slate-300 flex items-center gap-2">
-            <i class="fa fa-eye text-primary"></i> Preview
-          </h3>
+          <h2 id="h-display" class="font-semibold text-gray-700 dark:text-slate-200 flex items-center gap-2">
+            <i class="fa fa-picture-o text-primary"></i> Display
+          </h2>
           <div class="flex gap-2" role="group" aria-label="Display mode">
             <button id="mode-clock-button" aria-pressed="true" class="mode-btn text-white px-4 py-2 rounded-lg btn-hover font-medium">
               <i class="fa fa-clock-o"></i> Clock + Calendar
@@ -141,7 +190,7 @@
           </div>
         </div>
 
-        <div class="min-h-[10rem] flex items-center justify-center">
+        <div class="min-h-[10rem] p-4 flex items-center justify-center bg-gray-50 dark:bg-slate-900/60 rounded-lg border border-gray-100 dark:border-slate-700">
             <div id="preview-clock" class="flex flex-wrap items-stretch justify-center gap-4">
               <!-- Analog clock card -->
               <div class="card-effect flex items-center justify-center p-4" style="width:160px;">
@@ -200,77 +249,40 @@
           </div>
           <p id="image_status" role="status" class="text-xs text-gray-600 dark:text-slate-400">Choose a picture; it is scaled to the panel and converted to black &amp; white. Uploading it switches the display to image mode.</p>
         </div>
-      </div>
+      </section>
 
-
-      <!-- Device info -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 dark:bg-slate-900/60 rounded-lg border border-gray-100 dark:border-slate-700">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-            <i class="fa fa-microchip"></i>
+      <!-- Firmware -->
+      <section class="card-effect p-5 space-y-4" aria-labelledby="h-firmware">
+        <h2 id="h-firmware" class="font-semibold text-gray-700 dark:text-slate-200 flex items-center gap-2">
+          <i class="fa fa-microchip text-primary"></i> Firmware
+        </h2>
+        <p class="text-sm text-gray-600 dark:text-slate-400">Flash a firmware .bin file to the clock. Keep it connected and powered until the update finishes.</p>
+        <button id="upfirm-button" title="Connect to the clock first" class="bg-accent text-white px-5 py-2.5 rounded-lg flex items-center justify-center gap-2 btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
+          <i class="fa fa-refresh"></i> Firmware Update
+        </button>
+        <div id="progress-container" class="hidden">
+          <p class="text-sm font-medium text-gray-600 dark:text-slate-300 mb-1">Firmware Update Progress</p>
+          <div class="h-2 bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden">
+            <div id="update_progress_bar" class="h-full bg-gradient-to-r from-primary to-accent w-0 transition-all duration-300"></div>
           </div>
-          <div>
-            <p class="text-gray-500 dark:text-slate-400 text-sm">Device Name</p>
-            <p id="device_name" class="font-semibold">Not Connected</p>
-          </div>
+          <p id="update_progress_text" class="text-xs text-gray-500 dark:text-slate-400 mt-1">0%</p>
         </div>
-
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-full bg-warning/10 flex items-center justify-center text-warning">
-            <i class="fa fa-bolt"></i>
-          </div>
-          <div>
-            <p class="text-gray-500 dark:text-slate-400 text-sm">Current Voltage</p>
-            <p id="current_voltage" class="font-semibold">--.- V</p>
-          </div>
-        </div>
-
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-full bg-secondary/10 flex items-center justify-center text-secondary">
-            <i class="fa fa-calendar"></i>
-          </div>
-          <div>
-            <p class="text-gray-500 dark:text-slate-400 text-sm">Device Time</p>
-            <p id="current_time" class="font-semibold">--:--:--</p>
-            <p id="time_drift" class="text-xs text-gray-500 dark:text-slate-400"></p>
-          </div>
-        </div>
-
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-full bg-accent/10 flex items-center justify-center text-accent">
-            <i class="fa fa-laptop"></i>
-          </div>
-          <div>
-            <p class="text-gray-500 dark:text-slate-400 text-sm">System Time</p>
-            <p id="system_time" class="font-semibold">Loading...</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Progress bar -->
-      <div id="progress-container" class="hidden">
-        <p class="text-sm font-medium text-gray-600 dark:text-slate-300 mb-1">Firmware Update Progress</p>
-        <div class="h-2 bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden">
-          <div id="update_progress_bar" class="h-full bg-gradient-to-r from-primary to-accent w-0 transition-all duration-300"></div>
-        </div>
-        <p id="update_progress_text" class="text-xs text-gray-500 dark:text-slate-400 mt-1">0%</p>
-      </div>
+      </section>
 
       <!-- Log terminal -->
-      <div class="space-y-2">
+      <section class="card-effect p-5 space-y-3" aria-labelledby="h-log">
         <div class="flex justify-between items-center">
-          <h3 class="font-semibold text-gray-700 dark:text-slate-300 flex items-center gap-2">
+          <h2 id="h-log" class="font-semibold text-gray-700 dark:text-slate-200 flex items-center gap-2">
             <i class="fa fa-terminal text-primary"></i> Device Log
-          </h3>
+          </h2>
           <button id="clear-log-btn" class="text-xs text-gray-500 dark:text-slate-400 hover:text-danger transition-colors">
             <i class="fa fa-trash-o"></i> Clear Log
           </button>
         </div>
-
         <div id="log-window" role="log" aria-live="polite" class="bg-gray-900 text-gray-100 text-xs md:text-sm rounded-lg h-48 md:h-64 overflow-y-auto p-3 font-mono">
           <div class="text-gray-400 log-entry">Terminal started, waiting for device connection...</div>
         </div>
-      </div>
+      </section>
     </div>
 
     <!-- Footer -->
