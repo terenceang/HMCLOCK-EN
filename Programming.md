@@ -127,3 +127,26 @@ product header, the running build is installed into the primary slot (slot 0)
 with a wrap-safe generation id that outranks any existing slot
 (`selflash_install()` / `bump_image_flag` in `src/epd/spi_flash.c`), so it
 boots under every booter selection policy observed on these devices.
+
+---
+
+## Hardware access: SWD jig and test points
+
+![Pogo-pin jig on the board's SWD test points, J-Link wires attached](images/programming.png)
+
+Method 1 needs a J-Link on the SWD test points; a pogo-pin jig avoids soldering.
+
+![Test points](images/ESL.jpg)
+
+| TP | Signal | Chip pin | Use |
+|---|---|---|---|
+| TP1 | VCC | | supply |
+| TP2 | GND | | ground |
+| TP3 | VPP | | OTP programming voltage |
+| TP4 | RST | RST | reset (J-Link) |
+| TP5 | SWC | SWCLK | J-Link SWD clock |
+| TP6 | SWD | SWDIO | J-Link SWD data |
+| TP7 | TX | P0_4 | UART2 TX (debug log, 115200 8N1) |
+| TP8 | RX | P0_5 | UART2 RX (shared with SPI flash DI) |
+
+Full module pinout: `docs/pinout_0.md`.
