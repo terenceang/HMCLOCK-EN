@@ -34,12 +34,6 @@
 #ifndef _DA1458X_CONFIG_BASIC_H_
 #define _DA1458X_CONFIG_BASIC_H_
 
-#if defined (__DA14535__)
-    #include "da14535_config_basic.h"
-#elif defined (__DA14531__)
-    #include "da14531_config_basic.h"
-#else
-    #include "da14585_config_basic.h"
-#endif
+#include "da14585_config_basic.h"
 
 #endif // _DA1458X_CONFIG_BASIC_H_

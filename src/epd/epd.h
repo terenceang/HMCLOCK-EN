@@ -27,6 +27,13 @@ int sf_page_write(int addr, u8 *buf, int size);
 int sf_read(int addr, int len, u8 *buf);
 int selflash(int otp_boot);
 int ota_handle(u8 *buf, int len);
+int img_begin(int xres, int yres);
+int img_chunk(int seq, u8 *d, int n);
+int img_end(u32 crc);
+void img_abort(void);
+int img_render(int xres, int yres);
+int img_mode_get(void);
+void img_mode_set(int mode);
 
 // Boot/flash diagnostics filled in by selflash(); readable via the FF04
 // characteristic (diag_val_update()). See spi_flash.c for the byte layout.

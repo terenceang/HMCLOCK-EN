@@ -729,3 +729,167 @@ int ota_handle(u8 *buf, int len)
 
 /******************************************************************************/
 
+
+/******************************************************************************/
+/* Uploaded image (image display mode)                                        */
+/******************************************************************************/
+
+// Layout of the 0x3b000-0x3efff region (past the product header 0x38000,
+// pinout 0x39000 and panel info 0x3a000; the flash is >= 256KB so it can't wrap):
+//   0x3b000  image header (16 bytes, written last -> image valid)
+//   0x3c000  display-mode record {0xa5, mode}, its own sector so a mode
+//            change never touches the image
+//   0x3d000  pixels: logical row-major 1bpp, MSB first, 1 = white,
+//            rows padded to whole bytes (drawn through draw_pixel, so the
+//            web app needs no knowledge of the panel rotation)
+#define IMG_HDR    0x3b000
+#define IMG_MODE   0x3c000
+#define IMG_DATA   0x3d000
+#define IMG_MAGIC  0x31474d49	// "IMG1"
+#define IMG_CHUNK  128
+
+typedef struct {
+	u32 magic;
+	u16 xres, yres;
+	u16 len;
+	u16 pad;
+	u32 crc;
+} img_hdr_t;
+
+static int img_active;
+static int img_x, img_y, img_len, img_recv;
+static u32 img_crc;
+
+static int img_stride(int xres) { return (xres+7)>>3; }
+
+// Abandon a half-received upload (disconnect); the header is already erased,
+// so the old image stays invalid and the previous mode record is untouched.
+void img_abort(void)
+{
+	if(img_active){
+		img_active = 0;
+		arch_set_sleep_mode(ARCH_EXT_SLEEP_ON);
+	}
+}
+
+// Start an upload of an xres*yres bitmap: invalidate + erase the old image
+int img_begin(int xres, int yres)
+{
+	img_len = img_stride(xres)*yres;
+	if(img_len<=0 || img_len>0x2000) return -1;
+	img_x = xres;
+	img_y = yres;
+	img_recv = 0;
+	img_crc = 0;
+
+	arch_set_sleep_mode(ARCH_SLEEP_OFF);
+	fspi_init();
+	sf_sector_erase(ERASE_4K, IMG_HDR,        1);
+	sf_sector_erase(ERASE_4K, IMG_DATA,       1);
+	sf_sector_erase(ERASE_4K, IMG_DATA+0x1000, 1);
+	fspi_exit();
+	img_active = 1;
+	return 0;
+}
+
+// Chunk n (<=128 bytes) at offset seq*128; must arrive in order
+int img_chunk(int seq, u8 *d, int n)
+{
+	if(!img_active || n<1 || n>IMG_CHUNK || seq*IMG_CHUNK!=img_recv || img_recv+n>img_len){
+		return -1;
+	}
+	fspi_init();
+	sf_page_write(IMG_DATA+img_recv, d, n);
+	sf_wait();
+	fspi_exit();
+	img_crc = crc32(img_crc, d, n);
+	img_recv += n;
+	return 0;
+}
+
+// Finish: verify length + CRC (received, then re-read from flash) and only
+// then write the header. Returns 0 on success.
+int img_end(u32 crc)
+{
+	img_hdr_t h;
+	u8 buf[IMG_CHUNK];
+	u32 fcrc = 0;
+	int ok = img_active && img_recv==img_len && img_crc==crc;
+
+	if(ok){
+		fspi_init();
+		for(int off=0; off<img_len; off+=IMG_CHUNK){
+			int n = img_len-off<IMG_CHUNK ? img_len-off : IMG_CHUNK;
+			sf_read(IMG_DATA+off, n, buf);
+			fcrc = crc32(fcrc, buf, n);
+		}
+		ok = fcrc==crc;
+		if(ok){
+			h.magic = IMG_MAGIC;
+			h.xres = img_x;
+			h.yres = img_y;
+			h.len = img_len;
+			h.pad = 0;
+			h.crc = crc;
+			sf_page_write(IMG_HDR, (u8*)&h, sizeof(h));
+			sf_wait();
+		}
+		fspi_exit();
+	}
+	img_abort();
+	return ok ? 0 : -1;
+}
+
+// Is there a valid stored image of exactly xres*yres?
+static int img_valid(int xres, int yres, img_hdr_t *h)
+{
+	sf_read(IMG_HDR, sizeof(*h), (u8*)h);
+	return h->magic==IMG_MAGIC && h->xres==xres && h->yres==yres
+		&& h->len==img_stride(xres)*yres;
+}
+
+// Draw the stored image into the framebuffer (caller clears it first).
+// Returns 0 on success, -1 if no valid image is stored.
+int img_render(int xres, int yres)
+{
+	img_hdr_t h;
+	u8 row[40];
+
+	fspi_init();
+	if(!img_valid(xres, yres, &h) || img_stride(xres)>sizeof(row)){
+		fspi_exit();
+		return -1;
+	}
+	int stride = img_stride(xres);
+	for(int y=0; y<yres; y++){
+		sf_read(IMG_DATA+y*stride, stride, row);
+		for(int x=0; x<xres; x++){
+			draw_pixel(x, y, (row[x>>3] & (0x80>>(x&7))) ? WHITE : BLACK);
+		}
+	}
+	fspi_exit();
+	return 0;
+}
+
+// Persisted display mode: 0 = clock, 1 = image
+int img_mode_get(void)
+{
+	u8 rec[2];
+
+	fspi_init();
+	sf_read(IMG_MODE, 2, rec);
+	fspi_exit();
+	return (rec[0]==0xa5 && rec[1]==1) ? 1 : 0;
+}
+
+void img_mode_set(int mode)
+{
+	if(img_mode_get()==mode) return;
+	u8 rec[2] = {0xa5, (u8)mode};
+
+	fspi_init();
+	sf_sector_erase(ERASE_4K, IMG_MODE, 1);
+	sf_page_write(IMG_MODE, rec, 2);
+	sf_wait();
+	fspi_exit();
+}

@@ -302,7 +302,8 @@ static void app_clock_timer_cb(void)
             user_app_adv_start();
             // Full refresh on the hour (stat>=3) to clear any ghosting from the
             // repeated fast BT-icon toggles; fast update otherwise.
-            QR_draw(stat>=3 ? UPDATE_FULL : UPDATE_FAST);
+            if(display_mode!=1)
+                QR_draw(stat>=3 ? UPDATE_FULL : UPDATE_FAST);
         }
         return;
     }
@@ -343,7 +344,8 @@ static void app_clock_timer_cb(void)
 	}
 
 	// Update the screen based on the state or flags
-	if(stat>0 || flags&DRAW_BT){
+	// (image mode leaves the uploaded picture on the panel untouched)
+	if((stat>0 || flags&DRAW_BT) && display_mode!=1){
 		clock_draw(flags);
 	}
 }
@@ -402,7 +404,13 @@ void user_app_on_db_init_complete( void )
 	// reflects the just-started advertising/BT state)
 	//clock_draw(DRAW_BT|UPDATE_FULL);
 	user_app_adv_start();
-	QR_draw(UPDATE_FULL);
+	// Restore the persisted mode: the uploaded image if one is stored, else the
+	// pairing screen (the clock is not synced after a reset)
+	display_mode = img_mode_get();
+	if(display_mode!=1 || image_draw()!=0){
+		display_mode = 0;
+		QR_draw(UPDATE_FULL);
+	}
 
 	// Start the clock timer, aligned to the minute boundary
 	app_clock_timer_restart();
@@ -501,8 +509,10 @@ void user_app_adv_undirect_complete(uint8_t status)
 	// state and refresh the screen
 	if(status!=0){
 		adv_state = 0;
-		// Not yet synced -- show the pairing QR code
-    if(cal_minute<0){
+		// Not yet synced -- show the pairing QR code (image mode keeps its picture)
+    if(display_mode==1){
+    }
+    else if(cal_minute<0){
         QR_draw(UPDATE_FLY);
     }
 		else
@@ -532,6 +542,7 @@ void user_app_disconnect(struct gapc_disconnect_ind const *param)
     }
 
 	app_connection_idx = -1; // Reset the connection index to invalid
+	img_abort();             // drop any half-received image upload
 	adv_state = 0; // Mark as not advertising
 
 	// Restart advertising unless the remote user initiated the disconnect;
@@ -539,8 +550,10 @@ void user_app_disconnect(struct gapc_disconnect_ind const *param)
 	if(param->reason!=CO_ERROR_REMOTE_USER_TERM_CON){
 		user_app_adv_start();
 	}else{
-		    // Not yet synced -- show the pairing QR code
-    if(cal_minute<0){
+		    // Not yet synced -- show the pairing QR code (image mode keeps its picture)
+    if(display_mode==1){
+    }
+    else if(cal_minute<0){
         QR_draw(UPDATE_FLY);
     }
 		else

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Firmware (Keil MDK 5, armclang V6, Dialog DA14585, SDK 6.0.22.1401) plus a Web Bluetooth page for a repurposed Hema supermarket e-paper shelf label used as an analog clock + calendar. The project must live at `SDK_PATH/projects/target_apps/ble_examples/HMCLOCK` — include paths in `Keil_5/ble_app_peripheral.uvprojx` are relative to the SDK tree. The only target actually used is `DA14585`; the 531/535/586 configs are leftovers.
+Firmware (Keil MDK 5, armclang V6, Dialog DA14585, SDK 6.0.22.1401) plus a Web Bluetooth page for a repurposed Hema supermarket e-paper shelf label used as an analog clock + calendar. The project must live at `SDK_PATH/projects/target_apps/ble_examples/HMCLOCK` — include paths in `Keil_5/ble_app_peripheral.uvprojx` are relative to the SDK tree. `DA14585` is the only Keil target (the 531/535/586 targets and configs were removed).
 
 ## Build / run
 

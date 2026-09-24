@@ -147,6 +147,8 @@ int year=2026, month=0, date=0, wday=3;
 int hour=0, minute=0, second=0;
 // Minutes elapsed since the last time sync
 int cal_minute=-1;
+// Display mode: 0 = analog clock + calendar, 1 = uploaded image (mutually exclusive)
+int display_mode=0;
 
 
 //GUIQRLB
@@ -322,13 +324,17 @@ void clock_set(uint8_t *buf)
 }
 
 
+// Panel size; defined with the layouts table below
+static int layout_xres(void);
+static int layout_yres(void);
+
 void clock_push(void)
 {
-	struct custs1_val_set_req *req = KE_MSG_ALLOC_DYN(CUSTS1_VAL_SET_REQ, prf_get_task_from_id(TASK_ID_CUSTS1), TASK_APP, custs1_val_set_req, 11);
+	struct custs1_val_set_req *req = KE_MSG_ALLOC_DYN(CUSTS1_VAL_SET_REQ, prf_get_task_from_id(TASK_ID_CUSTS1), TASK_APP, custs1_val_set_req, 16);
 
 	req->conidx = app_env->conidx;
 	req->handle = SVC1_IDX_LONG_VALUE_VAL;
-	req->length = 11;
+	req->length = 16;
 	req->value[0] = year&0xff;
 	req->value[1] = year>>8;
 	req->value[2] = month;
@@ -340,6 +346,12 @@ void clock_push(void)
 	req->value[8] = (cal_minute>>8 )&0xff;
 	req->value[9] = (cal_minute>>16)&0xff;
 	req->value[10]= (cal_minute>>24)&0xff;
+	// Panel size (landscape drawing coordinates, = required image size) + mode
+	req->value[11]= layout_xres()&0xff;
+	req->value[12]= layout_xres()>>8;
+	req->value[13]= layout_yres()&0xff;
+	req->value[14]= layout_yres()>>8;
+	req->value[15]= display_mode;
 	KE_MSG_SEND(req);
 }
 
@@ -443,6 +455,9 @@ LAYOUT layouts[3] = {
 };
 
 int current_layout = 0;
+
+static int layout_xres(void) { return layouts[current_layout].xres; }
+static int layout_yres(void) { return layouts[current_layout].yres; }
 
 void select_layout(int xres, int yres)
 {
@@ -774,6 +789,73 @@ void clock_draw(int flags)
 	epd_commit();
 }
 
+// Draw the uploaded image from flash. Returns 0 on success, -1 if none is stored.
+int image_draw(void)
+{
+	LAYOUT *lt = &layouts[current_layout];
+
+	fb_clear();
+	if(img_render(lt->xres, lt->yres)!=0){
+		return -1;
+	}
+	epd_hw_open();
+	epd_update_mode(UPDATE_FULL);
+	epd_commit();
+	return 0;
+}
+
+// Redraw whichever clock-mode screen applies (pairing QR until first sync)
+static void clock_mode_draw(void)
+{
+	if(cal_minute<0)
+		QR_draw(UPDATE_FULL);
+	else
+		clock_draw(UPDATE_FULL);
+}
+
+/**
+ * Display-mode / image-upload commands (all via the long-value characteristic)
+ *   0x93 mode        : 0 = clock, 1 = image (needs a stored image)
+ *   0x94 w(2) h(2)   : begin upload; w x h must equal the panel size (see clock_push)
+ *   0x95 seq(2) data : chunk of <=128 bytes at offset seq*128, in order
+ *   0x96 crc32(4)    : finish; on a good CRC the image is stored and shown
+ * Image = logical row-major 1bpp, MSB first, 1 = white, rows padded to bytes.
+ */
+void image_cmd(const uint8_t *v, int len)
+{
+	LAYOUT *lt = &layouts[current_layout];
+
+	if(ota_state) return;
+
+	if(v[0]==0x93){
+		if(len<2) return;
+		if(v[1]==1){
+			if(image_draw()==0){
+				display_mode = 1;
+				img_mode_set(1);
+			}
+		}else{
+			display_mode = 0;
+			img_mode_set(0);
+			clock_mode_draw();
+		}
+	}else if(v[0]==0x94){
+		if(len<5) return;
+		if((v[1]|v[2]<<8)!=lt->xres || (v[3]|v[4]<<8)!=lt->yres) return;
+		img_begin(lt->xres, lt->yres);
+	}else if(v[0]==0x95){
+		if(len<4) return;
+		if(img_chunk(v[1]|v[2]<<8, (u8*)v+3, len-3)!=0) img_abort();
+	}else if(v[0]==0x96){
+		if(len<5) return;
+		if(img_end(v[1]|v[2]<<8|v[3]<<16|(u32)v[4]<<24)==0){
+			display_mode = 1;
+			img_mode_set(1);
+			image_draw();
+		}
+	}
+}
+
 
 /****************************************************************************************/
 
@@ -807,6 +889,7 @@ void user_svc1_ctrl_wr_ind_handler(ke_msg_id_t const msgid,
  *
  * Handles commands:
  * - 0x91: clock-set command
+ * - 0x93-0x96: display mode + image upload (see image_cmd)
  * - 0xA0 and above: OTA update related commands
  */
 void user_svc1_long_val_wr_ind_handler(ke_msg_id_t const msgid,
@@ -823,8 +906,10 @@ void user_svc1_long_val_wr_ind_handler(ke_msg_id_t const msgid,
 		// Set the clock (needs at least buf[1..8], 9 bytes total)
 		if(len<9) return;
 		clock_set((uint8_t*)param->value);
-		// Update the display (with Bluetooth icon, fast update mode)
-		clock_draw(DRAW_BT|UPDATE_FAST);
+		// Update the display (with Bluetooth icon, fast update mode); image mode
+		// keeps its picture and only takes the new time
+		if(display_mode!=1)
+			clock_draw(DRAW_BT|UPDATE_FAST);
 		// Print the current time
 		clock_print();
 	}else if(param->value[0]==0x92){
@@ -837,6 +922,9 @@ void user_svc1_long_val_wr_ind_handler(ke_msg_id_t const msgid,
 		printk("Calibration: %02x\n", diff_sec);
 		clock_fixup_set(diff_sec, cal_minute);
 		cal_minute = 0;
+	}else if(param->value[0]>=0x93 && param->value[0]<=0x96){
+		// Display mode / image upload
+		image_cmd((const uint8_t*)param->value, len);
 	}else if(param->value[0]>=0xa0){
 		// Handle OTA update commands
 		ota_handle((u8*)param->value, len);

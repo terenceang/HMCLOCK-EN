@@ -27,8 +27,17 @@ the same commit so the translations never drift.
 |---------|---------|---------|
 | `0x91` | 9 bytes: year(lo,hi), month(0-11), mday(1-31), hour, minute, second, wday | Set clock |
 | `0x92` | 3 bytes: diff_sec (int16 LE), 0 | Time calibration offset |
+| `0x93` | 1 byte: mode (0 = clock, 1 = image) | Set display mode (image needs a stored image) |
+| `0x94` | 4 bytes: w, h (u16 LE, must equal panel size) | Begin image upload (erases stored image) |
+| `0x95` | seq (u16 LE) + up to 128 bytes | Image chunk at offset seq*128, in order |
+| `0x96` | 4 bytes: CRC32 (LE) of the bitmap | End upload; stores + shows image if length/CRC match |
 | `>=0xA0` | see `ota_handle` | OTA update |
 | `0x90` | — | **Removed** (0xA50f0010): toggled an `h24_format` flag nothing ever read; do not reintroduce |
+
+Image bitmap format: logical (landscape) row-major 1bpp, MSB first, 1 = white, rows padded to whole bytes;
+firmware draws it via `draw_pixel`, so the web app never handles panel rotation. The `0xFF01` read/notify
+value is 16 bytes: time(7), cal_minute(4), panel w/h (u16 each), display mode. Image mode and clock mode are
+mutually exclusive (`display_mode`); the minute timer skips drawing in image mode.
 
 ## Firmware version bump convention
 

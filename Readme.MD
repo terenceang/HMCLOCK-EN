@@ -20,6 +20,12 @@ This project utilizes discarded **Hema Electronic Shelf Label (ESL)** hardware f
 
 ## Changelog
 
+### 0xA50f0012
+
+* **New image display mode, mutually exclusive with the analog clock + calendar.** The web app can now convert any picture to the panel size (letterboxed, Floyd-Steinberg dithered, 1-bit black & white) and upload it; the device stores it in SPI flash (`0x3B000-0x3EFFF`, clear of the firmware slots) and shows it until you switch back. The chosen mode and image survive power loss. In image mode the minute timer keeps the time but no longer redraws the panel (no nightly scrub either); low-battery shutdown still applies.
+* New BLE commands on `0xFF01`: `0x93` set mode (0 clock / 1 image), `0x94` begin upload (panel w, h), `0x95` chunk (seq, up to 128 bytes), `0x96` finish (CRC32 - the image is only stored and shown if length and CRC match, and the CRC is re-verified from flash). A dropped connection mid-upload cancels it.
+* The clock-data notification/read (`0xFF01`) grew from 11 to 16 bytes: panel width/height (u16 each) and the current display mode. The web app uses these to size the picture and show the mode.
+
 ### 0xA50f0011
 
 * **The pairing (QR) and low-battery screens now scale to the panel.** `QR_draw()` had every position hard-coded for the smallest 212×104 panel, so on the 250×122 and 296×128 variants the pairing screen left a dead band down the right side and across the bottom. Layout is now derived from the detected panel resolution, exactly like the clock screen. The 212×104 rendering is pixel-identical to before; larger panels fill the screen (the text column and divider stretch to the panel edges, the QR block is vertically centered).
