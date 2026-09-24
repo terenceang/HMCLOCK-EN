@@ -78,6 +78,20 @@ extern int adv_state;
  *
  * @return The computed voltage value
  */
+// Allocate a CUSTS1 value-set request for the current connection; caller fills value[] and sends it
+static struct custs1_val_set_req *val_set_alloc(uint16_t handle, uint16_t length)
+{
+    struct custs1_val_set_req *req = KE_MSG_ALLOC_DYN(CUSTS1_VAL_SET_REQ,
+                                                      prf_get_task_from_id(TASK_ID_CUSTS1),
+                                                      TASK_APP,
+                                                      custs1_val_set_req,
+                                                      length);
+    req->conidx = app_env->conidx;
+    req->handle = handle;
+    req->length = length;
+    return req;
+}
+
 int adc1_update(void)
 {
     // Calibrate the ADC offset, using single-ended input mode
@@ -87,18 +101,7 @@ int adc1_update(void)
     // Convert the ADC value to an actual voltage value (units: mV)
     int volt = (adcval*225)>>7;
 
-    // Allocate memory and build the BLE message
-    struct custs1_val_set_req *req = KE_MSG_ALLOC_DYN(CUSTS1_VAL_SET_REQ,
-                                                      prf_get_task_from_id(TASK_ID_CUSTS1),
-                                                      TASK_APP,
-                                                      custs1_val_set_req,
-                                                      DEF_SVC1_ADC_VAL_1_CHAR_LEN);
-    // Set the connection index
-    req->conidx = app_env->conidx;
-    // Set the characteristic value handle
-    req->handle = SVC1_IDX_ADC_VAL_1_VAL;
-    // Set the data length
-    req->length = DEF_SVC1_ADC_VAL_1_CHAR_LEN;
+    struct custs1_val_set_req *req = val_set_alloc(SVC1_IDX_ADC_VAL_1_VAL, DEF_SVC1_ADC_VAL_1_CHAR_LEN);
     // Set the voltage value (16-bit, low byte first)
     req->value[0] = volt&0xff;
     req->value[1] = volt>>8;
@@ -116,14 +119,7 @@ int adc1_update(void)
  */
 void diag_val_update(void)
 {
-    struct custs1_val_set_req *req = KE_MSG_ALLOC_DYN(CUSTS1_VAL_SET_REQ,
-                                                      prf_get_task_from_id(TASK_ID_CUSTS1),
-                                                      TASK_APP,
-                                                      custs1_val_set_req,
-                                                      DEF_SVC1_DIAG_VAL_CHAR_LEN);
-    req->conidx = app_env->conidx;
-    req->handle = SVC1_IDX_DIAG_VAL_VAL;
-    req->length = DEF_SVC1_DIAG_VAL_CHAR_LEN;
+    struct custs1_val_set_req *req = val_set_alloc(SVC1_IDX_DIAG_VAL_VAL, DEF_SVC1_DIAG_VAL_CHAR_LEN);
     for(int i=0; i<DEF_SVC1_DIAG_VAL_CHAR_LEN; i++){
         req->value[i] = flash_diag[i];
     }
@@ -232,7 +228,7 @@ static int get_month_day(int mon)
 	int is_leap = (year%4)? 0 : (year%100)? 1: (year%400)? 0: 1;
 	d2m[1] += is_leap;
 
-	return d2m[month];
+	return d2m[mon];
 }
 
 
@@ -330,11 +326,8 @@ static int layout_yres(void);
 
 void clock_push(void)
 {
-	struct custs1_val_set_req *req = KE_MSG_ALLOC_DYN(CUSTS1_VAL_SET_REQ, prf_get_task_from_id(TASK_ID_CUSTS1), TASK_APP, custs1_val_set_req, 16);
+	struct custs1_val_set_req *req = val_set_alloc(SVC1_IDX_LONG_VALUE_VAL, 16);
 
-	req->conidx = app_env->conidx;
-	req->handle = SVC1_IDX_LONG_VALUE_VAL;
-	req->length = 16;
 	req->value[0] = year&0xff;
 	req->value[1] = year>>8;
 	req->value[2] = month;
@@ -521,6 +514,13 @@ static void fb_clear(void)
 	memset(fb_rr, 0x00, scr_h*line_bytes);
 }
 
+// Drive both planes solid black (ghost scrub / clean-up before a picture)
+static void fb_black(void)
+{
+	memset(fb_bw, 0x00, scr_h*line_bytes);
+	memset(fb_rr, 0x00, scr_h*line_bytes);
+}
+
 // Flush the framebuffers to the panel, then park the system until the update
 // completes (see epd_wait_timer above)
 static void epd_commit(void)
@@ -540,8 +540,8 @@ void QR_draw(int mode)
 	int w;
 
 	// Current panel in landscape drawing coordinates (set by select_layout())
-	int xres = layouts[current_layout].xres;
-	int yres = layouts[current_layout].yres;
+	int xres = layout_xres();
+	int yres = layout_yres();
 
 	epd_hw_open();
 
@@ -590,8 +590,8 @@ void QR_draw(int mode)
 void LB_draw()
 {
 	// Current panel in landscape drawing coordinates (set by select_layout())
-	int xres = layouts[current_layout].xres;
-	int yres = layouts[current_layout].yres;
+	int xres = layout_xres();
+	int yres = layout_yres();
 
 	// Battery QR: scale 4 on the largest panel, 3 where a 124px block would not
 	// fit; centered on the screen. (The old hard-coded scale-4 position overflew
@@ -753,9 +753,7 @@ void clock_draw(int flags)
 	// clears the retained ghosts that fast/partial updates leave behind; the
 	// next minute's forced full redraw (app_clock_timer_cb) restores the face.
 	if(flags&DRAW_CLEAN){
-		// Drive the panel solid black (both planes 0x00) for the ghost scrub
-		memset(fb_bw, 0x00, scr_h*line_bytes);
-		memset(fb_rr, 0x00, scr_h*line_bytes);
+		fb_black();
 		epd_commit();
 		return;
 	}
@@ -823,8 +821,7 @@ int image_draw(int clean)
 		return -1;
 	}
 	if(clean){
-		memset(fb_bw, 0x00, scr_h*line_bytes);
-		memset(fb_rr, 0x00, scr_h*line_bytes);
+		fb_black();
 		epd_hw_open();
 		epd_update_mode(UPDATE_FAST);	// fast waveform: ~1/3 the time of a full refresh
 		image_pending = 1;
