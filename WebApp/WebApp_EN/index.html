@@ -23,11 +23,11 @@
       theme: {
         extend: {
           colors: {
-            primary: '#3B82F6',
-            secondary: '#10B981',
-            accent: '#8B5CF6',
-            warning: '#F59E0B',
-            danger: '#EF4444',
+            primary: '#2563EB',
+            secondary: '#047857',
+            accent: '#7C3AED',
+            warning: '#B45309',
+            danger: '#DC2626',
             dark: '#1E293B',
             light: '#F8FAFC'
           },
@@ -41,9 +41,6 @@
 
   <style type="text/tailwindcss">
     @layer utilities {
-      .content-auto {
-        content-visibility: auto;
-      }
       .btn-hover {
         @apply transition-all duration-300 hover:shadow-lg transform hover:-translate-y-0.5;
       }
@@ -83,58 +80,60 @@
       to { opacity: 1; transform: translateY(0); }
     }
 
-    .pulse {
-      animation: pulse 2s infinite;
-    }
 
-    @keyframes pulse {
-      0% { transform: scale(1); }
-      50% { transform: scale(1.05); }
-      100% { transform: scale(1); }
-    }
+    button:disabled { transform: none !important; box-shadow: none !important; }
+    :focus-visible, label:focus-within { outline: 2px solid #2563EB; outline-offset: 2px; }
+    .pref-btn { background: #475569; color: #fff; }
+    .pref-btn[aria-pressed="false"] { background: transparent; color: #475569; box-shadow: inset 0 0 0 1px #94a3b8; }
+    .dark .pref-btn[aria-pressed="false"] { color: #cbd5e1; }
+    .mode-btn { background: #475569; }
+    .mode-btn[aria-pressed="true"] { background: #2563EB; }
   </style>
 </head>
 
 <body class="min-h-screen p-4 md:p-6 flex justify-center items-start font-inter text-dark dark:text-slate-100 transition-colors duration-300">
   <div class="w-full max-w-4xl">
     <!-- Header -->
-    <header class="mb-6 text-center">
-      <h1 class="text-[clamp(1.8rem,4vw,2.5rem)] font-bold text-gradient mb-2">HM CLOCK Control Center</h1>
+    <header class="mb-6 flex flex-wrap items-center justify-between gap-3">
+      <h1 class="text-[clamp(1.5rem,4vw,2rem)] font-bold text-gradient">HM CLOCK Control Center</h1>
+      <div class="flex gap-2">
+        <button id="cardview-button" aria-pressed="true" class="pref-btn px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 font-medium">
+          <i class="fa fa-toggle-on"></i> Card View
+        </button>
+        <button id="theme-button" title="Theme: System" class="pref-btn px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 font-medium">
+          <i class="fa fa-desktop"></i> System
+        </button>
+      </div>
     </header>
 
     <!-- Main content card -->
     <div class="card-effect p-5 md:p-6 space-y-6">
       <!-- Control buttons -->
-      <div class="flex flex-wrap gap-3 md:gap-4">
+      <div class="grid grid-cols-2 sm:flex sm:flex-wrap gap-3 md:gap-4">
         <!-- Starts disabled; enabled only once a Bluetooth adapter is confirmed present -->
-        <button id="connect-button" class="bg-primary text-white px-5 py-2.5 rounded-lg flex items-center gap-2 btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
+        <button id="connect-button" class="col-span-2 sm:col-span-1 bg-primary text-white px-5 py-2.5 rounded-lg flex items-center justify-center gap-2 btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
           <i class="fa fa-bluetooth"></i> Connect Device
         </button>
-        <button id="setime-button" class="bg-warning text-white px-5 py-2.5 rounded-lg flex items-center gap-2 btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
+        <button id="setime-button" title="Connect to the clock first" class="bg-warning text-white px-5 py-2.5 rounded-lg flex items-center justify-center gap-2 btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
           <i class="fa fa-clock-o"></i> Sync Time
         </button>
-        <button id="upfirm-button" class="bg-accent text-white px-5 py-2.5 rounded-lg flex items-center gap-2 btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
+        <button id="upfirm-button" title="Connect to the clock first" class="bg-accent text-white px-5 py-2.5 rounded-lg flex items-center justify-center gap-2 btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
           <i class="fa fa-refresh"></i> Firmware Update
         </button>
-        <button id="calibration-button" class="bg-secondary text-white px-5 py-2.5 rounded-lg flex items-center gap-2 btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
+        <button id="calibration-button" title="Connect to the clock first" class="col-span-2 sm:col-span-1 bg-secondary text-white px-5 py-2.5 rounded-lg flex items-center justify-center gap-2 btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
           <i class="fa fa-wrench"></i> Time Calibration
-        </button>
-        <button id="cardview-button" class="bg-primary text-white px-5 py-2.5 rounded-lg flex items-center gap-2 btn-hover font-medium">
-          <i class="fa fa-th-large"></i> Card View
-        </button>
-        <button id="theme-button" class="bg-slate-600 text-white px-5 py-2.5 rounded-lg flex items-center gap-2 btn-hover font-medium">
-          <i class="fa fa-desktop"></i> System
         </button>
       </div>
 
       <!-- Bluetooth availability / connection error banner -->
-      <div id="bt-status" class="hidden"></div>
+      <div id="bt-status" class="hidden" role="alert"></div>
 
       <!-- Clock card view: analog clock on the left, iOS-style calendar icon on the right -->
       <div id="clock-card-view" class="flex flex-wrap items-stretch justify-center gap-4 p-4 bg-gray-50 dark:bg-slate-900/60 rounded-lg border border-gray-100 dark:border-slate-700">
+        <p id="card-source" class="order-last w-full text-center text-xs text-gray-500 dark:text-slate-400"></p>
         <!-- Analog clock card -->
         <div class="card-effect flex items-center justify-center p-4" style="width:160px;">
-          <svg viewBox="0 0 200 200" width="140" height="140">
+          <svg viewBox="0 0 200 200" width="140" height="140" role="img" aria-label="Analog clock">
             <circle cx="100" cy="100" r="94" class="fill-white dark:fill-slate-800 stroke-slate-800 dark:stroke-slate-200" stroke-width="4"/>
             <g class="stroke-slate-800 dark:stroke-slate-200" stroke-linecap="round">
               <line x1="100" y1="10" x2="100" y2="24" stroke-width="4" transform="rotate(0 100 100)"/>
@@ -196,6 +195,7 @@
           <div>
             <p class="text-gray-500 dark:text-slate-400 text-sm">Device Time</p>
             <p id="current_time" class="font-semibold">--:--:--</p>
+            <p id="time_drift" class="text-xs text-gray-500 dark:text-slate-400"></p>
           </div>
         </div>
 
@@ -211,30 +211,41 @@
       </div>
 
       <!-- Display mode: analog clock + calendar, or an uploaded picture (mutually exclusive) -->
-      <div class="p-4 bg-gray-50 dark:bg-slate-900/60 rounded-lg border border-gray-100 dark:border-slate-700 space-y-3">
+      <div class="p-4 bg-gray-50 dark:bg-slate-900/60 rounded-lg border border-gray-100 dark:border-slate-700 space-y-4">
         <div class="flex justify-between items-center">
           <h3 class="font-semibold text-gray-700 dark:text-slate-300 flex items-center gap-2">
             <i class="fa fa-picture-o text-primary"></i> Display Mode
           </h3>
           <span class="text-sm text-gray-500 dark:text-slate-400">Current: <span id="mode_label" class="font-semibold">--</span></span>
         </div>
-        <div class="flex flex-wrap gap-3">
-          <button id="mode-clock-button" class="bg-primary text-white px-4 py-2 rounded-lg btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
-            <i class="fa fa-clock-o"></i> Clock + Calendar
-          </button>
-          <button id="mode-image-button" class="bg-primary text-white px-4 py-2 rounded-lg btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
-            <i class="fa fa-picture-o"></i> Show Stored Image
-          </button>
-          <label class="bg-slate-600 text-white px-4 py-2 rounded-lg btn-hover font-medium cursor-pointer">
-            <i class="fa fa-folder-open-o"></i> Choose Image
-            <input id="image-file" type="file" accept="image/*" class="hidden">
-          </label>
-          <button id="image-upload-button" class="bg-accent text-white px-4 py-2 rounded-lg btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
-            <i class="fa fa-upload"></i> Upload Image
-          </button>
+        <div class="space-y-2">
+          <p class="text-sm text-gray-600 dark:text-slate-300">Show on the clock</p>
+          <div class="flex flex-wrap gap-3" role="group" aria-label="Show on the clock">
+            <button id="mode-clock-button" aria-pressed="false" title="Connect to the clock first" class="mode-btn text-white px-4 py-2 rounded-lg btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
+              <i class="fa fa-clock-o"></i> Clock + Calendar
+            </button>
+            <button id="mode-image-button" aria-pressed="false" title="Connect to the clock first" class="mode-btn text-white px-4 py-2 rounded-lg btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
+              <i class="fa fa-picture-o"></i> Show Stored Image
+            </button>
+          </div>
         </div>
-        <canvas id="image-preview" class="hidden border border-gray-300 dark:border-slate-600 max-w-full" style="image-rendering:pixelated"></canvas>
-        <p id="image_status" class="text-xs text-gray-500 dark:text-slate-400">Choose a picture; it is scaled to the panel and converted to black &amp; white. Uploading it switches the display to image mode.</p>
+        <div class="space-y-2 border-t border-gray-200 dark:border-slate-700 pt-3">
+          <p class="text-sm text-gray-600 dark:text-slate-300">Custom image</p>
+          <div class="flex flex-wrap gap-3">
+            <label class="bg-slate-600 text-white px-4 py-2 rounded-lg btn-hover font-medium cursor-pointer">
+              <i class="fa fa-folder-open-o"></i> Choose Image
+              <input id="image-file" type="file" accept="image/*" class="sr-only">
+            </label>
+            <button id="image-upload-button" title="Connect to the clock first" class="bg-accent text-white px-4 py-2 rounded-lg btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
+              <i class="fa fa-upload"></i> Upload Image
+            </button>
+          </div>
+          <canvas id="image-preview" class="hidden border border-gray-300 dark:border-slate-600 max-w-full" style="image-rendering:pixelated"></canvas>
+          <div id="image-progress-container" class="hidden h-2 bg-gray-200 dark:bg-slate-700 rounded-full overflow-hidden">
+            <div id="image-progress-bar" class="h-full bg-gradient-to-r from-primary to-accent w-0 transition-all duration-300"></div>
+          </div>
+          <p id="image_status" role="status" class="text-xs text-gray-600 dark:text-slate-400">Choose a picture; it is scaled to the panel and converted to black &amp; white. Uploading it switches the display to image mode.</p>
+        </div>
       </div>
 
       <!-- Progress bar -->
@@ -244,7 +255,6 @@
           <div id="update_progress_bar" class="h-full bg-gradient-to-r from-primary to-accent w-0 transition-all duration-300"></div>
         </div>
         <p id="update_progress_text" class="text-xs text-gray-500 dark:text-slate-400 mt-1">0%</p>
-        <div id="update_progress" class="hidden"></div>
       </div>
 
       <!-- Log terminal -->
@@ -258,7 +268,7 @@
           </button>
         </div>
 
-        <div id="log-window" class="bg-gray-900 text-gray-100 text-xs md:text-sm rounded-lg h-48 md:h-64 overflow-y-auto p-3 font-mono">
+        <div id="log-window" role="log" aria-live="polite" class="bg-gray-900 text-gray-100 text-xs md:text-sm rounded-lg h-48 md:h-64 overflow-y-auto p-3 font-mono">
           <div class="text-gray-400 log-entry">Terminal started, waiting for device connection...</div>
         </div>
       </div>
@@ -266,9 +276,11 @@
 
     <!-- Footer -->
     <footer class="mt-6 text-center text-xs text-gray-500 dark:text-slate-400">
-      <p>HM CLOCK Bluetooth Control Tool &copy; https://github.com/tpunix/HMCLOCK</p>
+      <p>HM CLOCK Bluetooth Control Tool &copy; <a href="https://github.com/tpunix/HMCLOCK" target="_blank" rel="noopener" class="underline">https://github.com/tpunix/HMCLOCK</a></p>
     </footer>
   </div>
+
+  <div id="toast" role="status" aria-live="polite" class="hidden"></div>
 
   <script src="https://cdn.sheetjs.com/crc-32-latest/package/crc32.js"></script>
 
@@ -288,6 +300,7 @@
       document.documentElement.classList.toggle('dark', isDark);
       const meta = themeMeta[mode];
       themeButton.innerHTML = `<i class="fa ${meta.icon}"></i> ${meta.label}`;
+      themeButton.title = `Theme: ${meta.label}`;
     }
 
     applyTheme(currentTheme);
@@ -318,11 +331,15 @@
     const calYear = document.getElementById('cal-year');
     let cardViewOn = true;
 
+    function setCardViewButton() {
+      cardviewButton.setAttribute('aria-pressed', cardViewOn);
+      cardviewButton.innerHTML = `<i class="fa ${cardViewOn ? 'fa-toggle-on' : 'fa-toggle-off'}"></i> Card View`;
+    }
+
     cardviewButton.addEventListener('click', () => {
       cardViewOn = !cardViewOn;
       cardView.classList.toggle('hidden', !cardViewOn);
-      cardviewButton.classList.toggle('bg-dark', !cardViewOn);
-      cardviewButton.classList.toggle('bg-primary', cardViewOn);
+      setCardViewButton();
       if (cardViewOn) {
         renderClockCard(deviceTimeBase ? deviceCurrentTime() : new Date());
       }
@@ -337,6 +354,8 @@
 
     function renderClockCard(date) {
       if (!cardViewOn) return;
+
+      document.getElementById('card-source').textContent = deviceTimeBase ? 'Device time' : 'System time (not connected)';
 
       const hour = date.getHours();
       const minute = date.getMinutes();
@@ -358,17 +377,11 @@
     // System time update
     function updateSystemTime() {
       const now = new Date();
-      const timeString = now.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-      });
-      const dateString = now.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit'
-      });
-      document.getElementById('system_time').textContent = `${dateString} ${timeString}`;
+      // Same format as the device time so the two can be compared at a glance
+      document.getElementById('system_time').textContent = formatTime(
+        now.getFullYear(), now.getMonth(), now.getDate(),
+        now.getHours(), now.getMinutes(), now.getSeconds()
+      );
 
       // Drive the card view from system time when no device is connected
       if (!deviceTimeBase) {
@@ -417,7 +430,8 @@
           typeColor = 'text-gray-300';
       }
 
-      logLine.innerHTML = `<span class="text-gray-500 mr-2">[${timestamp}]</span>${typeIcon}<span class="${typeColor}">${message}</span>`;
+      logLine.innerHTML = `<span class="text-gray-500 mr-2">[${timestamp}]</span>${typeIcon}<span class="${typeColor}"></span>`;
+      logLine.lastElementChild.textContent = message;  // textContent: log text may carry device/error strings
       logWindow.appendChild(logLine);
       logWindow.scrollTop = logWindow.scrollHeight;
     }
@@ -426,7 +440,7 @@
     const originalLog = console.log;
     console.log = function (...args) {
       originalLog(...args);
-      log(args.join(" "));
+      log(args.map(String).join(" "));
     };
 
     // Clear log
@@ -469,12 +483,33 @@
       document.getElementById('upfirm-button'),
       document.getElementById('calibration-button'),
       document.getElementById('mode-clock-button'),
-      document.getElementById('mode-image-button'),
-      document.getElementById('image-upload-button')
+      document.getElementById('mode-image-button')
     ];
 
     function setDeviceButtonsEnabled(enabled) {
-      deviceButtons.forEach(button => setButtonEnabled(button, enabled));
+      deviceButtons.forEach(button => {
+        setButtonEnabled(button, enabled);
+        button.title = enabled ? '' : 'Connect to the clock first';
+      });
+      updateUploadEnabled(enabled);
+    }
+
+    // Transient message pinned to the viewport, so results are visible wherever the button was
+    let toastTimer = null;
+    function toast(message, type = 'info') {
+      const el = document.getElementById('toast');
+      const bg = { success: 'bg-green-700', error: 'bg-red-700', warning: 'bg-amber-700', info: 'bg-slate-800' };
+      el.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-[90vw] px-4 py-3 rounded-lg shadow-lg text-white text-sm ' + (bg[type] || bg.info);
+      el.setAttribute('role', type === 'error' ? 'alert' : 'status');
+      el.textContent = message;
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => el.classList.add('hidden'), type === 'error' ? 9000 : 5000);
+    }
+
+    // Show a result both as a toast and in the device log
+    function notify(message, type = 'info') {
+      log(message, type);
+      toast(message, type);
     }
 
     // Enable/disable the Connect button and keep its styling in sync
@@ -531,6 +566,11 @@
         t.getFullYear(), t.getMonth(), t.getDate(),
         t.getHours(), t.getMinutes(), t.getSeconds()
       );
+
+      const drift = Math.round((t - new Date()) / 1000);
+      const driftEl = document.getElementById('time_drift');
+      driftEl.textContent = 'Drift vs system: ' + (drift > 0 ? '+' : '') + drift + ' s';
+      driftEl.className = 'text-xs ' + (Math.abs(drift) > 2 ? 'text-amber-700 dark:text-amber-400' : 'text-gray-500 dark:text-slate-400');
 
       // Drive the card view from device time when a device is connected
       renderClockCard(t);
@@ -591,7 +631,7 @@
           showMode(cur_time.getUint8(15));
         } else {
           panelW = panelH = 0;
-          setImageStatus('This firmware does not support image mode - update the firmware first.');
+          setImageStatus('This firmware does not support image mode - update the firmware first.', 'error');
         }
 
         // Save the device time baseline and current timestamp
@@ -607,10 +647,11 @@
         if (deviceTimeInterval) clearInterval(deviceTimeInterval);
         deviceTimeInterval = setInterval(updateDeviceTime, 1000);
 
+        checkSavedImage();
         connected = true;
         setDeviceButtonsEnabled(true);
 
-        connectButton.innerHTML = '<i class="fa fa-disconnect"></i> Disconnect';
+        connectButton.innerHTML = '<i class="fa fa-chain-broken"></i> Disconnect';
         connectButton.disabled = false;
       } catch (error) {
         console.log('Connection failed:', error);
@@ -654,8 +695,10 @@
         updateDeviceTime();
 
         console.log('Time sync succeeded!');
+        toast('Time synced.', 'success');
       } catch (error) {
         console.log('Time sync failed:', error);
+        toast('Time sync failed: ' + (error.message || error), 'error');
       } finally {
         setimeButton.innerHTML = '<i class="fa fa-clock-o"></i> Sync Time';
         setimeButton.disabled = false;
@@ -688,58 +731,63 @@
     }
 
     // Firmware update
+    // Pick a .bin through a plain file input (showOpenFilePicker is Chromium-desktop only); null if cancelled
+    function pickFile(accept) {
+      return new Promise(resolve => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = accept;
+        input.onchange = () => resolve(input.files[0] || null);
+        input.oncancel = () => resolve(null);
+        input.click();
+      });
+    }
+
     async function onUpdate() {
       const upfirmButton = document.getElementById('upfirm-button');
-      upfirmButton.disabled = true;
-      upfirmButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Updating...';
-
-      document.getElementById('progress-container').classList.remove('hidden');
+      const progressContainer = document.getElementById('progress-container');
+      const idleLabel = upfirmButton.innerHTML;
 
       let firm_buf, firm_size;
-
+      console.log('Opening file picker');
       try {
-        console.log('Opening file picker');
-        const [handle] = await window.showOpenFilePicker({
-          types: [{ description: 'Firm files', accept: { 'text/plain': ['.bin'] } }]
-        });
-        const file = await handle.getFile();
-        let abuf = await readFileAsArrayBuffer(file);
-        firm_buf = new Uint8Array(abuf);
+        const file = await pickFile('.bin');
+        if (!file) return;
+        firm_buf = new Uint8Array(await readFileAsArrayBuffer(file));
         firm_size = file.size;
       } catch (err) {
-        console.log('File read failed:', err);
-        upfirmButton.innerHTML = '<i class="fa fa-refresh"></i> Firmware Update';
-        upfirmButton.disabled = false;
-        document.getElementById('progress-container').classList.add('hidden');
+        notify('Could not read that file: ' + (err.message || err), 'error');
         return;
       }
 
       let firm_magic = new Uint8Array([0x79, 0x13, 0xa5, 0xf9, 0x86, 0xec, 0x5a, 0x06]);
       let pos = find_patten(firm_buf, firm_magic);
       if (pos == -1) {
-        console.log('Invalid firmware: version marker not found!');
-        upfirmButton.innerHTML = '<i class="fa fa-refresh"></i> Firmware Update';
-        upfirmButton.disabled = false;
-        document.getElementById('progress-container').classList.add('hidden');
+        notify('Invalid firmware file: version marker not found.', 'error');
         return;
       }
 
       let firm_ver = firm_buf[pos + 9] * 256 + firm_buf[pos + 8];
       let firm_crc = CRC32.buf(firm_buf);
       console.log('Firmware version:', firm_ver, 'size:', firm_size, 'CRC:', (firm_crc >>> 0).toString(16));
+      if (!confirm(`Flash firmware v${firm_ver} (${firm_size} bytes) to the clock?\n\nDo not disconnect or power off the clock during the update.`)) return;
+
+      setButtonEnabled(upfirmButton, false);
+      upfirmButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Updating...';
+      progressContainer.classList.remove('hidden');
 
       let buf = new Uint8Array(136);
       let view = new DataView(buf.buffer);
-      buf[0] = 0xa0;
-      view.setUint16(2, firm_size, true);
-      await longValue.writeValue(buf);
-
       let sent = 0;
       const totalSize = firm_size + 64;
       const progressBar = document.getElementById('update_progress_bar');
       const progressText = document.getElementById('update_progress_text');
 
       try {
+        buf[0] = 0xa0;
+        view.setUint16(2, firm_size, true);
+        await longValue.writeValue(buf);
+
         for (let i = 0; i < totalSize; i += 256) {
           buf.fill(0xff);
           if (i === 0) {
@@ -763,82 +811,83 @@
           await longValue.writeValue(buf);
           sent += 128;
 
-          // Update progress bar
           const progress = Math.min(Math.round(100 * sent / totalSize), 100);
           progressBar.style.width = `${progress}%`;
           progressText.textContent = `${progress}%`;
-          document.getElementById('update_progress').textContent = `Update progress: ${progress}%`;
         }
 
         buf[0] = 0xa4;
         buf.fill(0, 1, 4);
         await longValue.writeValue(buf);
-        console.log('Update complete');
+        notify('Update sent. The clock will restart with the new firmware.', 'success');
       } catch (error) {
-        console.log('Update ended, Bluetooth disconnected');
+        notify('Connection ended during the update. Check the clock and reconnect.', 'warning');
       } finally {
-        upfirmButton.innerHTML = '<i class="fa fa-refresh"></i> Firmware Update';
-        upfirmButton.disabled = false;
-        document.getElementById('progress-container').classList.add('hidden');
+        upfirmButton.innerHTML = idleLabel;
+        setButtonEnabled(upfirmButton, connected);
+        progressContainer.classList.add('hidden');
       }
     }
 
-	async function onCalibration() {
-	  const calibrationButton = document.getElementById('calibration-button');
-	  calibrationButton.disabled = true;
+    async function onCalibration() {
+      const calibrationButton = document.getElementById('calibration-button');
+      const idleLabel = calibrationButton.innerHTML;
+      setButtonEnabled(calibrationButton, false);
+      calibrationButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Calibrating...';
 
-	  try {
-		let cur_time = await longValue.readValue();
-		const last_minute = cur_time.getUint8(5);
-		const cal_minute = cur_time.getInt32(7, true);
-		console.log(cal_minute+' minutes since last sync');
+      try {
+        let cur_time = await longValue.readValue();
+        const last_minute = cur_time.getUint8(5);
+        const cal_minute = cur_time.getInt32(7, true);
+        console.log(cal_minute + ' minutes since last sync');
 
-		console.log('Waiting for the minute to roll over......');
-		let minute = last_minute;
-		while (minute === last_minute) {
-		  cur_time = await longValue.readValue();
-		  minute = cur_time.getUint8(5);
-		}
-		const second = cur_time.getUint8(6);
+        console.log('Waiting for the minute to roll over......');
+        let minute = last_minute;
+        while (minute === last_minute) {
+          cur_time = await longValue.readValue();
+          minute = cur_time.getUint8(5);
+        }
+        const second = cur_time.getUint8(6);
 
-		const today = new Date();
-		let sys_minute = today.getMinutes();
-		const sys_second = today.getSeconds();
-		console.log('Device time: '+minute+'m'+second+'s');
-		console.log('System time: '+sys_minute+'m'+sys_second+'s');
+        const today = new Date();
+        let sys_minute = today.getMinutes();
+        const sys_second = today.getSeconds();
+        console.log('Device time: ' + minute + 'm' + second + 's');
+        console.log('System time: ' + sys_minute + 'm' + sys_second + 's');
 
-		if(cal_minute==-1){
-			console.log('Please sync time first!');
-		}else if(cal_minute<2880){
-			console.log('Interval between sync and calibration is too short (less than two days)!');
-		}else{
+        if (cal_minute == -1) {
+          notify('Sync the time first.', 'warning');
+        } else if (cal_minute < 2880) {
+          notify('Calibrate at least two days after syncing (only ' + cal_minute + ' min since the last sync).', 'warning');
+        } else {
+          if (minute > sys_minute) {
+            if (minute - sys_minute > 50)
+              sys_minute += 60;
+          } else {
+            if (sys_minute - minute > 50)
+              minute += 60;
+          }
 
-			if(minute>sys_minute){
-				if(minute-sys_minute>50)
-					sys_minute += 60;
-			}else{
-				if(sys_minute-minute>50)
-					minute += 60;
-			}
+          const diff = (minute * 60 + second) - (sys_minute * 60 + sys_second);
+          console.log('Time difference: ' + diff + 's');
 
-			const diff = (minute*60+second)-(sys_minute*60+sys_second);
-			console.log('Time difference: '+diff+'s');
+          // Signed 16-bit, little-endian -- bitwise ops give the correct two's complement bytes for negative differences
+          const buf = new Uint8Array(4);
+          buf[0] = 0x92;
+          buf[1] = diff & 0xff;
+          buf[2] = (diff >> 8) & 0xff;
+          buf[3] = 0x00;
+          await longValue.writeValue(buf);
 
-			// Signed 16-bit, little-endian -- bitwise ops give the correct
-			// two's complement bytes for negative differences
-			const buf = new Uint8Array(4);
-			buf[0] = 0x92;
-			buf[1] = diff & 0xff;
-			buf[2] = (diff >> 8) & 0xff;
-			buf[3] = 0x00;
-			await longValue.writeValue(buf);
-
-			console.log('Calibration complete');
-		}
-	  } finally {
-		calibrationButton.disabled = false;
-	  }
-	}
+          notify('Calibration sent (time difference ' + diff + ' s).', 'success');
+        }
+      } catch (error) {
+        notify('Calibration failed: ' + (error.message || error), 'error');
+      } finally {
+        calibrationButton.innerHTML = idleLabel;
+        setButtonEnabled(calibrationButton, connected);
+      }
+    }
 
     // Disconnect
     function disconnect() {
@@ -869,6 +918,7 @@
       document.getElementById('device_name').textContent = "Not Connected";
       document.getElementById('current_voltage').textContent = "--.- V";
       document.getElementById('current_time').textContent = "--:--:--";
+      document.getElementById('time_drift').textContent = "";
 
       const connectButton = document.getElementById('connect-button');
       connectButton.innerHTML = '<i class="fa fa-bluetooth"></i> Connect Device';
@@ -932,28 +982,121 @@
 
     // ---- Display mode / image upload ----
     let panelW = 0, panelH = 0;   // panel size reported by the device (landscape)
+    let sourceImg = null;   // picture chosen this session; re-fitted if the connected panel is a different size
+    let imageW = 0, imageH = 0;   // size of imageBits (a saved image may not match the connected panel)
     let imageBits = null;         // 1bpp bitmap ready to upload (row-major, MSB first, 1 = white)
 
-    function setImageStatus(text) {
-      document.getElementById('image_status').textContent = text;
+    // Panel size to use before a device has reported one: the last one seen, else 212x104
+    function defaultPanel() {
+      try {
+        const p = JSON.parse(localStorage.getItem('hmclock-panel'));
+        if (p && p.w > 0 && p.h > 0) return p;
+      } catch (e) { /* fall through */ }
+      return { w: 212, h: 104 };
+    }
+
+    // Upload needs a connection and an image that matches the panel
+    function updateUploadEnabled(enabled = connected) {
+      const button = document.getElementById('image-upload-button');
+      const fits = imageBits && imageW == panelW && imageH == panelH;
+      setButtonEnabled(button, enabled && !!fits);
+      button.title = !enabled ? 'Connect to the clock first' : !imageBits ? 'Choose an image first' : '';
+    }
+
+    // Keep the converted bitmap in localStorage (a few KB) so it survives a reload
+    function saveImage() {
+      try {
+        const b64 = btoa(Array.from(imageBits, b => String.fromCharCode(b)).join(''));
+        localStorage.setItem('hmclock-image', JSON.stringify({ w: imageW, h: imageH, bits: b64 }));
+      } catch (e) { /* storage full or blocked: the image just won't persist */ }
+    }
+
+    function drawBits(bits, w, h) {
+      const canvas = document.getElementById('image-preview');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      const px = ctx.createImageData(w, h);
+      const stride = (w + 7) >> 3;
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const v = bits[y * stride + (x >> 3)] & (0x80 >> (x & 7)) ? 255 : 0;
+          const i = (y * w + x) * 4;
+          px.data[i] = px.data[i + 1] = px.data[i + 2] = v;
+          px.data[i + 3] = 255;
+        }
+      }
+      ctx.putImageData(px, 0, 0);
+      canvas.classList.remove('hidden');
+      canvas.style.width = (w * 2) + 'px';
+    }
+
+    function restoreSavedImage() {
+      try {
+        const saved = JSON.parse(localStorage.getItem('hmclock-image'));
+        if (!saved) return;
+        const bits = Uint8Array.from(atob(saved.bits), c => c.charCodeAt(0));
+        if (bits.length !== ((saved.w + 7) >> 3) * saved.h) return;
+        imageBits = bits;
+        imageW = saved.w;
+        imageH = saved.h;
+        drawBits(bits, imageW, imageH);
+        setImageStatus('Restored the image saved in this browser (' + imageW + 'x' + imageH + '). Click Upload Image to send it.');
+      } catch (e) { /* corrupt or unavailable: start empty */ }
+    }
+
+    // Called once the panel size is known: a saved image of another size cannot be sent
+    function checkSavedImage() {
+      if (panelW) {
+        try { localStorage.setItem('hmclock-panel', JSON.stringify({ w: panelW, h: panelH })); } catch (e) { /* not persisted */ }
+      }
+      if (!imageBits || (imageW == panelW && imageH == panelH)) return;
+      if (sourceImg && panelW) {
+        convertImage(sourceImg, panelW, panelH);
+        setImageStatus('Re-fitted the image to the ' + panelW + 'x' + panelH + ' panel. Click Upload Image to send it.');
+      } else {
+        setImageStatus('The saved image is ' + imageW + 'x' + imageH + ' but this panel is ' + panelW + 'x' + panelH + ' - choose the image again.', 'error');
+      }
+    }
+
+    function setImageStatus(text, kind) {
+      const el = document.getElementById('image_status');
+      const color = { error: 'text-red-600 dark:text-red-400', success: 'text-green-700 dark:text-green-400' };
+      el.textContent = text;
+      el.className = 'text-xs ' + (color[kind] || 'text-gray-600 dark:text-slate-400');
     }
 
     function showMode(mode) {
       document.getElementById('mode_label').textContent = mode == 1 ? 'Image' : 'Clock + Calendar';
+      document.getElementById('mode-clock-button').setAttribute('aria-pressed', mode != 1);
+      document.getElementById('mode-image-button').setAttribute('aria-pressed', mode == 1);
+    }
+
+    // the stored value is the command just written until the device refreshes it, so poll for the 16-byte status
+    async function readStatus() {
+      let v;
+      for (let i = 0; i < 8; i++) {
+        await new Promise(r => setTimeout(r, 300));
+        v = await longValue.readValue();
+        if (v.byteLength >= 16) break;
+      }
+      return v;
     }
 
     async function setMode(mode) {
-      await longValue.writeValue(new Uint8Array([0x93, mode]));
-      // Read back what the device actually ended up in (image mode needs a stored image)
-      const v = await longValue.readValue();
-      if (v.byteLength >= 16) showMode(v.getUint8(15));
-      if (mode == 1 && v.byteLength >= 16 && v.getUint8(15) != 1) setImageStatus('No stored image - upload one first.');
+      try {
+        await longValue.writeValue(new Uint8Array([0x93, mode]));
+        const v = await readStatus();
+        if (v.byteLength >= 16) showMode(v.getUint8(15));
+        if (mode == 1 && v.byteLength >= 16 && v.getUint8(15) != 1) setImageStatus('No stored image - upload one first.', 'error');
+      } catch (error) {
+        notify('Could not change the display mode: ' + (error.message || error), 'error');
+      }
     }
 
     // Scale the picture to the panel (letterboxed on white), dither to 1 bit
     // (Floyd-Steinberg), show the result in the preview and keep the packed bits
-    function convertImage(img) {
-      const w = panelW, h = panelH;
+    function convertImage(img, w, h) {
       const canvas = document.getElementById('image-preview');
       canvas.width = w;
       canvas.height = h;
@@ -986,33 +1129,41 @@
       }
       ctx.putImageData(px, 0, 0);
       canvas.classList.remove('hidden');
+      canvas.style.width = (w * 2) + 'px';  // pixelated 2x so the small panel is legible
       imageBits = bits;
+      imageW = w;
+      imageH = h;
+      saveImage();
+      updateUploadEnabled();
     }
 
     function onImageChosen(event) {
       const file = event.target.files[0];
       if (!file) return;
-      if (!panelW) {
-        setImageStatus('Connect to the device first (the picture is sized to its panel).');
-        return;
-      }
       const img = new Image();
       img.onload = () => {
-        convertImage(img);
+        sourceImg = img;
+        const size = defaultPanel();
+        convertImage(img, panelW || size.w, panelH || size.h);
         URL.revokeObjectURL(img.src);
-        setImageStatus('Converted to ' + panelW + 'x' + panelH + ' black & white. Click Upload Image to send it.');
+        setImageStatus(connected ? 'Converted to ' + imageW + 'x' + imageH + ' black & white. Click Upload Image to send it.' : 'Converted to ' + imageW + 'x' + imageH + ' black & white. Connect to the clock to upload it (it is re-fitted if the panel is a different size).');
       };
-      img.onerror = () => setImageStatus('Could not read that file as an image.');
+      img.onerror = () => setImageStatus('Could not read that file as an image.', 'error');
       img.src = URL.createObjectURL(file);
+      event.target.value = '';  // lets the same file be picked again
     }
 
     async function onImageUpload() {
       if (!imageBits) {
-        setImageStatus('Choose an image first.');
+        setImageStatus('Choose an image first.', 'error');
         return;
       }
       const button = document.getElementById('image-upload-button');
+      const progressContainer = document.getElementById('image-progress-container');
+      const progressBar = document.getElementById('image-progress-bar');
       setButtonEnabled(button, false);
+      progressBar.style.width = '0%';
+      progressContainer.classList.remove('hidden');
       try {
         let buf = new Uint8Array(5);
         let view = new DataView(buf.buffer);
@@ -1030,7 +1181,9 @@
           buf[2] = seq >> 8;
           buf.set(part, 3);
           await longValue.writeValue(buf);
-          setImageStatus('Uploading... ' + Math.round((off + part.length) * 100 / imageBits.length) + '%');
+          const pct = Math.round((off + part.length) * 100 / imageBits.length);
+          progressBar.style.width = pct + '%';
+          setImageStatus('Uploading... ' + pct + '%');
         }
 
         buf = new Uint8Array(5);
@@ -1040,15 +1193,18 @@
         await longValue.writeValue(buf);
 
         // The device switches to image mode only if the CRC matched
-        const v = await longValue.readValue();
+        const v = await readStatus();
         const ok = v.byteLength >= 16 && v.getUint8(15) == 1;
         if (v.byteLength >= 16) showMode(v.getUint8(15));
-        setImageStatus(ok ? 'Image uploaded and displayed.' : 'Upload failed (CRC/length mismatch) - try again.');
+        setImageStatus(ok ? 'Image uploaded and displayed.' : 'Upload failed (CRC/length mismatch) - try again.', ok ? 'success' : 'error');
+        toast(ok ? 'Image uploaded and displayed.' : 'Upload failed (CRC/length mismatch) - try again.', ok ? 'success' : 'error');
       } catch (error) {
         console.log('Image upload failed:', error);
-        setImageStatus('Upload failed: ' + (error.message || error));
+        setImageStatus('Upload failed: ' + (error.message || error), 'error');
+        toast('Upload failed: ' + (error.message || error), 'error');
       } finally {
-        if (connected) setButtonEnabled(button, true);
+        progressContainer.classList.add('hidden');
+        updateUploadEnabled();
       }
     }
 
@@ -1061,6 +1217,8 @@
     document.getElementById('setime-button').addEventListener('click', onSetTime);
     document.getElementById('upfirm-button').addEventListener('click', onUpdate);
     document.getElementById('calibration-button').addEventListener('click', onCalibration);
+
+    restoreSavedImage();
   </script>
 </body>
 </html>
