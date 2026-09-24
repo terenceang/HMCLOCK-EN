@@ -6,3 +6,20 @@ Keil_5/JLinkLog.txt
 Keil_5/build_log.txt
 Keil_5/build_debug_log.txt
 
+
+# AI coding-assistant files (local only, never tracked)
+CLAUDE.md
+AGENTS.md
+CLAUDE.local.md
+.claude/
+GEMINI.md
+.gemini/
+.codex/
+.cursor/
+.cursorrules
+.cursorignore
+.windsurf/
+.windsurfrules
+.aider*
+.continue/
+.github/copilot-instructions.md
