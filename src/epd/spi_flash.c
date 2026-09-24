@@ -417,11 +417,12 @@ static void sf_write_mem(int dst, u8 *src, int len)
 // CRC, version @28, encryption @32 = 0. The generation id is set one above
 // the highest existing slot id (wrap-safe), so this image wins on booters
 // that pick slot 0 unconditionally *and* on booters that pick the highest id.
-static void selflash_install(int firm_size, u32 firm_crc, int slot0, int slot1)
+static void selflash_install(int firm_size, int slot0, int slot1)
 {
 	u8 pbuf[256];
 	u32 *p32 = (u32*)pbuf;
 	int f0 = -1, f1 = -1, hi, new_flag;
+	u32 firm_crc;
 
 	// Diag: [20..22] = running version (low 3 bytes), [23] = what this boot
 	// did: 0x01 = slot install ran, 0x02 = up-to-date skip; when reinstalling,
@@ -430,24 +431,27 @@ static void selflash_install(int firm_size, u32 firm_crc, int slot0, int slot1)
 	flash_diag[21] = (EPD_VERSION>>8) & 0xff;
 	flash_diag[22] = (EPD_VERSION>>16) & 0xff;
 	flash_diag[23] = 0x00;
-	flash_diag_set(24, firm_crc);
 	flash_diag_set(28, firm_size);
 
-	// Up to date? Slot 0 already carries this exact build. While checking,
-	// record which field(s) mismatched into the diag status byte (bits 2..5)
-	// so a reinstall-every-boot problem can be diagnosed over BLE.
+	// Up to date? Slot 0 already carries this build. Identity is magic + size +
+	// version only (no 48 KB CRC scan on every boot) -- so EPD_VERSION MUST be
+	// bumped for every build. While checking, record which field(s) mismatched
+	// into the diag status byte (bits 2..5) so a reinstall-every-boot problem
+	// can be diagnosed over BLE.
 	sf_read(slot0, 64, pbuf);
 	if(pbuf[0]!=0x70 || pbuf[1]!=0x51) flash_diag[23] |= 0x04;
 	if(p32[1]!=(u32)firm_size)         flash_diag[23] |= 0x08;
-	if(p32[2]!=firm_crc)               flash_diag[23] |= 0x10;
 	if(p32[7]!=EPD_VERSION)            flash_diag[23] |= 0x20;
 	if((flash_diag[23] & 0x3c)==0){
 		printk("Slots up to date.\n");
+		flash_diag_set(24, p32[2]);
 		flash_diag[23] |= 0x02;
 		return;
 	}
 
 	flash_diag[23] |= 0x01;
+	firm_crc = crc32(0, (u8*)0x07fc0000, firm_size);
+	flash_diag_set(24, firm_crc);
 
 	printk("Install image to slot %08x (size %d)\n", slot0, firm_size);
 
@@ -531,8 +535,6 @@ int selflash(int otp_boot)
 	int region_table = (int)&Region$$Table$$Base;
 	int firm_size = *(u32*)(region_table+0x10) - 0x07fc0000;
 	printk("Firm size: %08x\n", firm_size);
-	u32 firm_crc = crc32(0, (u8*)0x07fc0000, firm_size);
-	printk("Firm  crc: %08x\n", firm_crc);
 	printk("Firm  ver: %08x\n", EPD_VERSION);
 
 
@@ -555,7 +557,7 @@ int selflash(int otp_boot)
 		image_addr[1] = p32[2];
 		printk("Slots: %08x + %08x\n", image_addr[0], image_addr[1]);
 
-		selflash_install(firm_size, firm_crc, image_addr[0], image_addr[1]);
+		selflash_install(firm_size, image_addr[0], image_addr[1]);
 
 		fspi_exit();
 		return 0;
