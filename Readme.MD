@@ -100,7 +100,9 @@ After syncing the time, performing two calibrations 2 to 3 weeks apart will keep
 * Once the device is connected, click the "Time Calibration" button and wait about one minute.
 * Perform a time synchronization immediately after calibration.
 
-![Control Panel](./images/Control%20Panel.png)
+[![Control Panel](./images/Control%20Panel.png)](https://terenceang.github.io/HMCLOCK-EN/)
+
+Open the [web control panel](https://terenceang.github.io/HMCLOCK-EN/) in Chrome or Edge (Web Bluetooth) to connect to the clock.
 
 When powered on for the first time, it will show a pairing page. Scan the QR code to open the web page and pair.
 
