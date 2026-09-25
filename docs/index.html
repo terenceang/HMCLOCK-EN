@@ -119,6 +119,12 @@
               <p id="device_name" class="font-normal text-gray-500 dark:text-slate-400">Not Connected</p>
               <p class="text-gray-500 dark:text-slate-400 text-sm mt-1">EPD Size / Colours</p>
               <p id="panel_size" class="font-normal text-gray-500 dark:text-slate-400">--</p>
+              <label for="panel-color" class="block text-gray-500 dark:text-slate-400 text-sm mt-1">Panel colour type</label>
+              <select id="panel-color" title="Connect to the clock first" class="text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 opacity-50 cursor-not-allowed" disabled>
+                <option value="0">Auto (panel record)</option>
+                <option value="1">Black / White</option>
+                <option value="2">Black / White / Red</option>
+              </select>
             </div>
           </div>
           <div class="flex items-center gap-3">
@@ -531,11 +537,12 @@
       button.classList.toggle('cursor-not-allowed', !enabled);
     }
 
-    // The three actions that require a live device connection
+    // The controls that require a live device connection
     const deviceButtons = [
       document.getElementById('setime-button'),
       document.getElementById('upfirm-button'),
-      document.getElementById('calibration-button')
+      document.getElementById('calibration-button'),
+      document.getElementById('panel-color')
     ];
 
     function setDeviceButtonsEnabled(enabled) {
@@ -755,6 +762,8 @@
           panelH = cur_time.getUint16(13, true);
           showMode(cur_time.getUint8(15));
           // Byte 16 (newer firmware): 1 = black/white/red panel
+          panelColor.value = cur_time.byteLength >= 18 ? cur_time.getUint8(17) : 0;
+          panelColorSupported = cur_time.byteLength >= 18;
           const colors = cur_time.byteLength >= 17 ? (cur_time.getUint8(16) ? ', black/white/red' : ', black/white') : '';
           document.getElementById('panel_size').textContent = panelW + ' x ' + panelH + ' px' + colors;
           setValueStyle('panel_size', false);
@@ -777,6 +786,7 @@
         checkSavedImage();
         connected = true;
         setDeviceButtonsEnabled(true);
+        if (!panelColorSupported) setButtonEnabled(panelColor, false);   // older firmware can't switch it
         setPill('on');
         renderPreview();
 
@@ -865,6 +875,39 @@
         input.click();
       });
     }
+
+    // The clock is restarting: (optionally) wait for the dropped link to register
+    // (up to the BLE supervision timeout), then reconnect without a chooser.
+    async function reconnectAfterReset(dev, waitForDrop) {
+      for (let i = 0; i < 60 && waitForDrop && connected; i++) await new Promise(r => setTimeout(r, 500));
+      for (let i = 0; i < 5 && dev && !connected; i++) {
+        await new Promise(r => setTimeout(r, 4000));
+        await connectToDevice(dev);
+      }
+    }
+
+    // Panel colour override (0 auto, 1 black/white, 2 black/white/red); the clock restarts to apply it
+    const panelColor = document.getElementById('panel-color');
+    let panelColorSupported = false;
+    let panelColorCurrent = '0';
+    panelColor.addEventListener('focus', () => { panelColorCurrent = panelColor.value; });
+    panelColor.addEventListener('change', async () => {
+      const value = panelColor.value;
+      if (!await confirmDialog('Change panel colour type?', 'The clock will restart to apply this. Choose the type that matches the attached e-paper panel.', 'Change')) {
+        panelColor.value = panelColorCurrent;
+        return;
+      }
+      const dev = lastDevice;
+      try {
+        await longValue.writeValueWithResponse(Uint8Array.of(0x97, Number(value)));
+        // A reply means the clock did not restart (unsupported or unchanged)
+        notify('The clock did not restart - the colour type was not changed.', 'warning');
+        panelColor.value = panelColorCurrent;
+        return;
+      } catch (e) { /* expected: the clock restarts and drops the link */ }
+      notify('Restarting the clock to apply the panel colour type...', 'info');
+      await reconnectAfterReset(dev, true);
+    });
 
     async function onUpdate() {
       const upfirmButton = document.getElementById('upfirm-button');
@@ -983,12 +1026,7 @@
         return;
       }
       // After a good update the browser may need up to the BLE supervision timeout to notice the dropped link
-      for (let i = 0; i < 60 && finishing && connected; i++) await new Promise(r => setTimeout(r, 500));
-      const dev = lastDevice;
-      for (let i = 0; i < 5 && dev && !connected; i++) {
-        await new Promise(r => setTimeout(r, 4000));
-        await connectToDevice(dev);
-      }
+      await reconnectAfterReset(lastDevice, finishing);
       if (finishing && connected) {
         const running = document.getElementById('firmware_version').textContent;
         if (running === 'v' + firm_ver) notify('Firmware v' + firm_ver + ' is running.', 'success');
