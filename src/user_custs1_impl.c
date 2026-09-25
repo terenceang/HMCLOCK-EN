@@ -324,6 +324,11 @@ void clock_set(uint8_t *buf)
 static int layout_xres(void);
 static int layout_yres(void);
 
+// How long the last panel update kept BUSY high, for the web app (0.2 s units,
+// saturating at 255 = 51 s): diagnoses an update that ends before the waveform does
+static int epd_polls;
+static u8  epd_refresh_ds;
+
 void clock_push(void)
 {
 	struct custs1_val_set_req *req = val_set_alloc(SVC1_IDX_LONG_VALUE_VAL, 22);
@@ -348,7 +353,7 @@ void clock_push(void)
 	req->value[16]= (scr_mode&EPD_BWR)? 1 : 0;	// panel colours: 0 = black/white, 1 = black/white/red
 	req->value[17]= panel_color_ovr;			// colour override: 0 = auto, 1 = black/white, 2 = black/white/red
 	req->value[18]= panel_size_ovr;			// size override: 0 = auto, 1..3 = layouts[] index + 1
-	req->value[19]= lut_size;				// controller waveform register size (70 / 100 / 153 ...)
+	req->value[19]= epd_refresh_ds;			// last panel update time, 0.2 s units (0 = none yet)
 	req->value[20]= epd_temp[0];			// controller temperature register (16 bit, value/256 = degrees C)
 	req->value[21]= epd_temp[1];
 	KE_MSG_SEND(req);
@@ -485,14 +490,19 @@ void select_layout(int xres, int yres)
 static int image_pending = 0;
 static void image_paint(void);
 
+extern int app_connection_idx;
+
 static void epd_wait_timer(void)
 {
     if(epd_busy()){
-        // Screen is still busy, check again in 40ms
+        // Screen is still busy, check again in 400ms (app_easy_timer counts 10 ms slots)
+        epd_polls++;
         epd_wait_hnd = app_easy_timer(40, epd_wait_timer);
     }else{
         // Screen update complete
         epd_wait_hnd = EASY_TIMER_INVALID_TIMER;
+        // Each poll is 0.4 s = 2 units; the idle poll is the one after the last busy one
+        epd_refresh_ds = ((epd_polls+1)*2 > 255)? 255 : (epd_polls+1)*2;
         // Send the deep sleep command
         epd_cmd1(0x10, 0x01);
         // Power off
@@ -501,6 +511,8 @@ static void epd_wait_timer(void)
         epd_hw_close();
         // Put the system into extended sleep mode
         arch_set_sleep_mode(ARCH_EXT_SLEEP_ON);
+        // Let a connected web app see the refresh time
+        if(app_connection_idx!=-1) clock_push();
         if(image_pending){
             image_pending = 0;
             image_paint();
@@ -527,6 +539,7 @@ static void fb_black(void)
 // completes (see epd_wait_timer above)
 static void epd_commit(void)
 {
+	epd_polls = 0;
 	epd_init();
 	epd_screen_update();
 	epd_update();
