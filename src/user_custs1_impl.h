@@ -86,6 +86,7 @@ void clock_set(uint8_t *buf);
 void clock_push(void);
 void clock_draw(int full);
 void QR_draw(int mode);
+void TEST_draw(void);
 void LB_draw(void);
 
 /**

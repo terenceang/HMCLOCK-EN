@@ -617,6 +617,68 @@ void LB_draw()
 	epd_commit();
 }
 
+// Display test / calibration screen (BLE command 0x98), laid out from the panel
+// resolution (designed against 250x122, scales to the other layouts). Checks:
+//  - active area and orientation: border, and corner blocks (TL/BR black, TR/BL red)
+//  - colours: white / black / red swatches (red draws black on B/W panels)
+//  - resolution: 1px and 2px line patterns
+void TEST_draw(void)
+{
+	char tbuf[24];
+	int xres = layout_xres();
+	int yres = layout_yres();
+	int cx = xres/2;
+
+	epd_hw_open();
+	epd_update_mode(UPDATE_FULL);
+	fb_clear();
+
+	draw_rect(0, 0, xres-1, yres-1, BLACK);
+	draw_rect(1, 1, xres-2, yres-2, BLACK);
+	draw_box(2, 2, 9, 9, BLACK);
+	draw_box(xres-10, 2, xres-3, 9, RED);
+	draw_box(2, yres-10, 9, yres-3, RED);
+	draw_box(xres-10, yres-10, xres-3, yres-3, BLACK);
+
+	select_font(0); // sfont
+	draw_text_centered(cx, 2, "DISPLAY TEST", RED);
+	sprintf(tbuf, "%d x %d  %s", xres, yres, (scr_mode&EPD_BWR)? "BWR" : "BW");
+	draw_text_centered(cx, 14, tbuf, BLACK);
+
+	// Colour swatches: white (outlined), black, red, with labels
+	{
+		int bw = xres/6;
+		int x0 = (xres - 4*bw)/2;
+		int y1 = yres*36/100;
+		int y2 = yres*62/100;
+		static const char *const name[3] = {"WHITE", "BLACK", "RED"};
+		static const int color[3] = {WHITE, BLACK, RED};
+
+		for(int i=0; i<3; i++){
+			int x1 = x0 + i*bw*3/2;
+			int x2 = x1 + bw - 1;
+			draw_rect(x1, y1, x2, y2, BLACK);
+			if(color[i]!=WHITE) draw_box(x1+1, y1+1, x2-1, y2-1, color[i]);
+			draw_text_centered((x1+x2)/2, y2+2, (char*)name[i], BLACK);
+		}
+	}
+
+	// Resolution patterns: 1px lines on the left half, 2px lines on the right
+	{
+		int y1 = yres*80/100;
+		int y2 = yres-6;
+		int xa = xres/6;
+		int xb = xres*5/6;
+
+		for(int x=xa; x<cx; x+=2)
+			draw_vline(x, y1, y2, BLACK);
+		for(int x=cx; x<xb; x+=4)
+			draw_box(x, y1, x+1, y2, BLACK);
+	}
+
+	epd_commit();
+}
+
 // Integer sin(deg)*1000 for deg=0..90; other quadrants derived by symmetry in isin()/icos().
 // Avoids pulling in float/libm on a Cortex-M0 target for what is only ever a once-a-minute redraw.
 static const int sin_tab[91] = {
@@ -928,6 +990,7 @@ void user_svc1_ctrl_wr_ind_handler(ke_msg_id_t const msgid,
  * Handles commands:
  * - 0x91: clock-set command
  * - 0x93-0x96: display mode + image upload (see image_cmd)
+ * - 0x98: draw the display test / calibration screen
  * - 0x97 colour size: panel overrides (colour 0 auto, 1 black/white, 2 black/white/red;
  *   size 0 auto, 1..3 = layouts[] index + 1)
  * - 0xA0 and above: OTA update related commands
@@ -966,6 +1029,9 @@ void user_svc1_long_val_wr_ind_handler(ke_msg_id_t const msgid,
 		// Panel colour + size override; the chip restarts if either changed
 		if(len<3 || ota_state) return;
 		panel_config_set(param->value[1], param->value[2]);
+	}else if(param->value[0]==0x98){
+		// Display test screen; the next clock redraw or a mode switch replaces it
+		if(!ota_state) TEST_draw();
 	}else if(param->value[0]>=0x93 && param->value[0]<=0x96){
 		// Display mode / image upload
 		image_cmd((const uint8_t*)param->value, len);
