@@ -39,6 +39,7 @@ void img_mode_set(int mode);
 void panel_config_set(int colour, int size);
 extern int panel_color_ovr;
 extern int panel_size_ovr;
+extern int lut_size;	// waveform register size probed at boot (identifies the controller)
 
 // Panel resolutions the card layout is proportioned against (landscape drawing
 // coordinates; the driver's native w x h is yres x xres). Also the sizes the

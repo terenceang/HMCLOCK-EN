@@ -779,7 +779,8 @@
           panelColorSupported = cur_time.byteLength >= 18;
           panelSizeSupported = cur_time.byteLength >= 19;
           panelCurrent = { color: panelColor.value, size: panelSize.value };
-          const colors = cur_time.byteLength >= 17 ? (cur_time.getUint8(16) ? ', black/white/red' : ', black/white') : '';
+          const colors = (cur_time.byteLength >= 17 ? (cur_time.getUint8(16) ? ', black/white/red' : ', black/white') : '')
+            + (cur_time.byteLength >= 20 ? ', LUT ' + cur_time.getUint8(19) : '');   // LUT size identifies the controller
           document.getElementById('panel_size').textContent = panelW + ' x ' + panelH + ' px' + colors;
           setValueStyle('panel_size', false);
         } else {
