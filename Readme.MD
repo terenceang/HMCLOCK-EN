@@ -17,6 +17,12 @@ This project utilizes discarded **Hema Electronic Shelf Label (ESL)** hardware f
 * ✅ Bluetooth time synchronization
 * ✅ Time calibration
 * ✅ Bluetooth OTA firmware update
+* ✅ Image mode: upload any picture from the web app (converted to 1-bit black and white); it is kept across power loss
+* ✅ Low-battery screen and a nightly full refresh to clear e-paper ghosting
+
+---
+
+**Contents:** [Supported screens](#supported-screens) · [What you need](#what-you-need) · [Compilation and Flashing](#compilation-and-flashing) · [Updating the firmware](#updating-the-firmware) · [Time sync](#bluetooth-time-synchronization) · [Troubleshooting](#troubleshooting) · [Case](#case-assembly) · [Flash layout](#flash-storage-layout) · [License](#license) · [Changelog](CHANGELOG.md)
 
 ---
 
@@ -47,6 +53,17 @@ Notes:
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md).
+
+---
+
+## What you need
+
+* A supported Hema ESL (see the table above); the 2.13" A41 is the reference.
+* A programmer for the first flash: a J-Link, or a CMSIS-DAP/ST-Link probe with OpenOCD. A pogo-pin jig on the board's SWD test points makes this easy (see [`Programming.md`](Programming.md)).
+* A battery or bench supply; most salvaged ESL batteries are nearly flat.
+* Optional: a printed case (`3D/EPD case.step`).
+* A Chrome or Edge browser with Web Bluetooth to use the [control panel](https://terenceang.github.io/HMCLOCK-EN/).
+* Pinouts and panel wiring: `Hardware/` and `docs/pinout_*`.
 
 ---
 
@@ -86,6 +103,12 @@ Notes:
 
 ---
 
+## Updating the firmware
+
+After the first flash, update over Bluetooth: open the [control panel](https://terenceang.github.io/HMCLOCK-EN/), connect, choose a firmware `.bin` and click **Firmware Update**. The clock checks the image, reboots into it and the page reconnects. Details, and a known limitation on some units, are in [`Programming.md`](Programming.md#method-2--bluetooth-ota-end-users).
+
+---
+
 ## Bluetooth Time Synchronization
 
 The project's built-in web page provides **Web Bluetooth** functionality for manual time synchronization:
@@ -110,6 +133,16 @@ When powered on for the first time, it will show a pairing page. Scan the QR cod
 
 ![Pairing Prompt](./images/pairing.jpg)
 
+
+---
+
+## Troubleshooting
+
+* **Wrong or garbled picture, or the panel stays blank:** the panel size can't be read from the panel. Pick the right size in the control panel's **Panel** dropdown and use **Test pattern** to check.
+* **Weak contrast:** seen on the 250 x 122 HINK-E0213A22-A0, probably because the board's boost circuit is sized for the A41.
+* **Can't pair:** scan the QR code shown on the panel; Web Bluetooth needs Chrome or Edge on a device with a Bluetooth adapter.
+* **Firmware didn't change after an update:** see the OTA limitation in [`Programming.md`](Programming.md#method-2--bluetooth-ota-end-users).
+* **Clock drifts:** run **Time Calibration** twice, 2 to 3 weeks apart.
 
 ---
 
@@ -166,3 +199,9 @@ Example:
 * Flash contains the screen and pin configuration, so the new firmware does not need to hardcode this information;
 * The stock firmware cannot be scanned via Bluetooth, making it difficult to update via OTA directly without initially flashing;
 * Most ESL batteries are nearly depleted, so it is recommended to disassemble and replace the power supply.
+
+---
+
+## License
+
+The original [HMCLOCK](https://github.com/tpunix/HMCLOCK) project by tpunix does not state a license, so none is declared here either. The DA14585 SDK, SmartSnippets and other vendor files in `docs/` are Renesas software under Renesas's own terms.
