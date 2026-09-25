@@ -173,6 +173,7 @@
             <i class="fa fa-wrench"></i> Time Calibration
           </button>
         </div>
+        <label class="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400 cursor-pointer"><input id="opt-autosync" type="checkbox" class="w-4 h-4"> Sync time automatically when connecting</label>
         <p class="connect-note text-xs text-gray-600 dark:text-slate-400">Connect to the clock to enable these buttons.</p>
       </section>
 
@@ -775,6 +776,7 @@
 
         connectButton.innerHTML = '<i class="fa fa-chain-broken"></i> Disconnect';
         connectButton.disabled = false;
+        if (autoSync.checked) onSetTime();
       } catch (error) {
         console.log('Connection failed:', error);
         // disconnect() first, so the specific reason below wins over any
@@ -785,6 +787,12 @@
     }
 
     // Time sync
+    const autoSync = document.getElementById('opt-autosync');
+    try { autoSync.checked = localStorage.getItem('hmclock-autosync') === '1'; } catch (e) { /* not persisted */ }
+    autoSync.addEventListener('change', () => {
+      try { localStorage.setItem('hmclock-autosync', autoSync.checked ? '1' : '0'); } catch (e) { /* not persisted */ }
+    });
+
     async function onSetTime() {
       const setimeButton = document.getElementById('setime-button');
       setimeButton.disabled = true;
