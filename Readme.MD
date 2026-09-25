@@ -204,4 +204,4 @@ Example:
 
 ## License
 
-The original [HMCLOCK](https://github.com/tpunix/HMCLOCK) project by tpunix does not state a license, so none is declared here either. The DA14585 SDK, SmartSnippets and other vendor files in `docs/` are Renesas software under Renesas's own terms.
+This fork's changes are released under the [MIT License](LICENSE), copyright Terence Ang. It is based on the original [HMCLOCK](https://github.com/tpunix/HMCLOCK) project by tpunix, which does not state a license; credit for the original work goes to tpunix. The DA14585 SDK, SmartSnippets and other vendor files in `docs/` are Renesas software under Renesas's own terms.
