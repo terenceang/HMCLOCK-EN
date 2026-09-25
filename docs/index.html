@@ -124,6 +124,8 @@
               <button id="lut-button" title="Connect to the clock first" class="mt-2 bg-slate-600 text-white text-sm px-3 py-1.5 rounded-lg btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
                 <i class="fa fa-list-alt"></i> Dump waveform to log
               </button>
+              <p class="text-gray-500 dark:text-slate-400 text-sm mt-1">Last refresh time</p>
+              <p id="refresh_time" class="font-normal text-gray-500 dark:text-slate-400">--</p>
               <label for="panel-size" class="block text-gray-500 dark:text-slate-400 text-sm mt-1">Panel size</label>
               <select id="panel-size" title="Connect to the clock first" class="text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 opacity-50 cursor-not-allowed" disabled>
                 <option value="0">Auto (panel record)</option>
@@ -344,7 +346,7 @@
       <p>HM CLOCK Bluetooth Control Tool &copy; <a href="https://github.com/tpunix/HMCLOCK" target="_blank" rel="noopener" class="underline text-primary">https://github.com/tpunix/HMCLOCK</a></p>
       <p class="mt-1">Fork by Terence Ang - motionfxdesign</p>
       <!-- The placeholder below is replaced with the commit + time by .github/workflows/sync-docs.yml when publishing -->
-      <p class="mt-1">Web app build: <span id="web-build">b2e0580, 2026-09-25 02:52 UTC</span></p>
+      <p class="mt-1">Web app build: <span id="web-build">7d2564b, 2026-09-25 03:09 UTC</span></p>
       <p class="mt-1">Shortcuts: <kbd>C</kbd> connect / disconnect &middot; <kbd>S</kbd> sync time &middot; <kbd>D</kbd> switch clock / image</p>
     </footer>
   </div>
@@ -782,6 +784,7 @@
           panelH = cur_time.getUint16(13, true);
           showMode(cur_time.getUint8(15));
           // Byte 16 (newer firmware): 1 = black/white/red panel
+          showRefreshTime(cur_time);
           // Bytes 20-21 (newer firmware): the controller's temperature register, 16 bit, value/256 = degrees C
           if (cur_time.byteLength >= 22) {
             const raw = cur_time.getInt16(20, false);
@@ -793,8 +796,7 @@
           panelColorSupported = cur_time.byteLength >= 18;
           panelSizeSupported = cur_time.byteLength >= 19;
           panelCurrent = { color: panelColor.value, size: panelSize.value };
-          const colors = (cur_time.byteLength >= 17 ? (cur_time.getUint8(16) ? ', black/white/red' : ', black/white') : '')
-            + (cur_time.byteLength >= 20 ? ', LUT ' + cur_time.getUint8(19) : '');   // LUT size identifies the controller
+          const colors = (cur_time.byteLength >= 17 ? (cur_time.getUint8(16) ? ', black/white/red' : ', black/white') : '');
           document.getElementById('panel_size').textContent = panelW + ' x ' + panelH + ' px' + colors;
           setValueStyle('panel_size', false);
         } else {
@@ -1167,6 +1169,7 @@
       document.getElementById('firmware_version').textContent = "--";
       document.getElementById('panel_size').textContent = "--";
       document.getElementById('panel_temp').textContent = "--";
+      document.getElementById('refresh_time').textContent = "--";
       ['device_name', 'panel_size', 'panel_temp', 'firmware_version', 'current_voltage', 'current_time'].forEach(id => setValueStyle(id, true));
       document.getElementById('battery-bar').classList.add('hidden');
       document.getElementById('battery-note').textContent = '';
@@ -1602,11 +1605,25 @@
     }
     document.getElementById('lut-button').addEventListener('click', onLutDump);
 
+    // Byte 19 (newer firmware): how long the last panel update kept BUSY high, in 0.2 s units.
+    // A tri-colour full refresh should take roughly 15-25 s; a few seconds means it ended early.
+    function showRefreshTime(dv) {
+      const ds = dv.byteLength >= 20 ? dv.getUint8(19) : 0;
+      const el = document.getElementById('refresh_time');
+      el.textContent = ds === 0 ? '--' : (ds === 255 ? '>= 51 s' : (ds / 5).toFixed(1) + ' s');
+      if (ds) setValueStyle('refresh_time', false);
+    }
+
     // Display test / calibration screen; Clock + Calendar (or the next redraw) brings the clock back
     document.getElementById('test-button').addEventListener('click', async () => {
       try {
         await longValue.writeValueWithResponse(Uint8Array.of(0x98));
         toast('Test pattern sent. Click Clock + Calendar to go back.', 'info');
+        // The clock republishes its status when the update ends; watch for the refresh time
+        for (let i = 0; i < 30 && connected; i++) {
+          await new Promise(r => setTimeout(r, 3000));
+          try { showRefreshTime(await longValue.readValue()); } catch (e) { break; }
+        }
       } catch (error) {
         toast('Could not send the test pattern: ' + (error.message || error), 'error');
       }
