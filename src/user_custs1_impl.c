@@ -326,7 +326,7 @@ static int layout_yres(void);
 
 void clock_push(void)
 {
-	struct custs1_val_set_req *req = val_set_alloc(SVC1_IDX_LONG_VALUE_VAL, 16);
+	struct custs1_val_set_req *req = val_set_alloc(SVC1_IDX_LONG_VALUE_VAL, 17);
 
 	req->value[0] = year&0xff;
 	req->value[1] = year>>8;
@@ -345,6 +345,7 @@ void clock_push(void)
 	req->value[13]= layout_yres()&0xff;
 	req->value[14]= layout_yres()>>8;
 	req->value[15]= display_mode;
+	req->value[16]= (scr_mode&EPD_BWR)? 1 : 0;	// panel colours: 0 = black/white, 1 = black/white/red
 	KE_MSG_SEND(req);
 }
 

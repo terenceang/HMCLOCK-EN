@@ -117,7 +117,7 @@
             <div>
               <p class="text-gray-500 dark:text-slate-400 text-sm">Device Name</p>
               <p id="device_name" class="font-normal text-gray-500 dark:text-slate-400">Not Connected</p>
-              <p class="text-gray-500 dark:text-slate-400 text-sm mt-1">EPD Size</p>
+              <p class="text-gray-500 dark:text-slate-400 text-sm mt-1">EPD Size / Colours</p>
               <p id="panel_size" class="font-normal text-gray-500 dark:text-slate-400">--</p>
             </div>
           </div>
@@ -754,7 +754,9 @@
           panelW = cur_time.getUint16(11, true);
           panelH = cur_time.getUint16(13, true);
           showMode(cur_time.getUint8(15));
-          document.getElementById('panel_size').textContent = panelW + ' x ' + panelH + ' px';
+          // Byte 16 (newer firmware): 1 = black/white/red panel
+          const colors = cur_time.byteLength >= 17 ? (cur_time.getUint8(16) ? ', black/white/red' : ', black/white') : '';
+          document.getElementById('panel_size').textContent = panelW + ' x ' + panelH + ' px' + colors;
           setValueStyle('panel_size', false);
         } else {
           panelW = panelH = 0;
