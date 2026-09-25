@@ -55,7 +55,7 @@
  ****************************************************************************************
  */
 
-#define EPD_VERSION 0xA50f0026
+#define EPD_VERSION 0xA50f0027
 
 
 /*
@@ -117,7 +117,8 @@ static const struct advertise_configuration user_adv_conf = {
 
     .addr_src = APP_CFG_ADDR_SRC(USER_CFG_ADDRESS_MODE),
 
-    /// Minimum interval for advertising
+    /// Advertising interval: 687.5ms trades connect latency (worst case ~0.7s
+    /// to catch an event, ~22 events in the 15s burst) for radio-on time
     .intv_min = MS_TO_BLESLOTS(687.5),                    // 687.5ms
 
     /// Maximum interval for advertising
@@ -345,7 +346,7 @@ static const struct default_handlers_configuration  user_default_hnd_conf = {
     .adv_scenario = DEF_ADV_WITH_TIMEOUT,
 
     // Configure the advertise period in case of DEF_ADV_WITH_TIMEOUT.
-    // It is measured in timer units (3 min). Use MS_TO_TIMERUNITS macro to convert
+    // It is measured in timer units (10 ms). Use MS_TO_TIMERUNITS macro to convert
     // from milliseconds (ms) to timer units.
     // Fires once every ~10-minute clock cycle (app_clock_timer_cb, user_peripheral.c) --
     // 15s is still a generous connect window (real connects complete in 1-3s once

@@ -426,7 +426,7 @@ void user_app_on_db_init_complete( void )
  */
 void user_app_adv_start(void)
 {
-	u8 vbuf[4]; // Version-info AD structure buffer
+	u8 vbuf[6]; // Version-info AD structure buffer
 
 	// Return immediately if already advertising
 	if(adv_state)
@@ -438,11 +438,15 @@ void user_app_adv_start(void)
 	// Add the device-name AD structure
 	app_add_ad_struct(cmd, adv_name, adv_name[0]+1, 1);
 
-	// Build the version-info AD structure (length + type + low two version bytes)
-	vbuf[0] = 0x03;
+	// Build the version-info AD structure: length + type + company ID 0xFFFF
+	// (reserved for testing, so scanners don't misattribute the device) + low
+	// two version bytes
+	vbuf[0] = 0x05;
 	vbuf[1] = GAP_AD_TYPE_MANU_SPECIFIC_DATA;
-	vbuf[2] = EPD_VERSION&0xff;
-	vbuf[3] = (EPD_VERSION>>8)&0xff;
+	vbuf[2] = 0xff;
+	vbuf[3] = 0xff;
+	vbuf[4] = EPD_VERSION&0xff;
+	vbuf[5] = (EPD_VERSION>>8)&0xff;
 	app_add_ad_struct(cmd, vbuf, vbuf[0]+1, 1);
 
 	// Start undirected advertising with a timeout: a longer window until the clock
@@ -509,16 +513,18 @@ void user_app_adv_undirect_complete(uint8_t status)
 	printk("user_app_adv_undirect_complete: %02x\n", status);
 	// A non-zero status means it ended abnormally; update the advertising
 	// state and refresh the screen
+	// Advertising is over either way, so always clear the state (otherwise a
+	// status-0 stop would block every later user_app_adv_start)
+	adv_state = 0;
 	if(status!=0){
-		adv_state = 0;
 		// Not yet synced -- show the pairing QR code (image mode keeps its picture)
-    if(display_mode==1){
-    }
-    else if(cal_minute<0){
-        QR_draw(UPDATE_FLY);
-    }
+		if(display_mode==1){
+		}
+		else if(cal_minute<0){
+			QR_draw(UPDATE_FLY);
+		}
 		else
-		clock_draw(UPDATE_FLY);
+			clock_draw(UPDATE_FLY);
 	}
 }
 
@@ -553,16 +559,15 @@ void user_app_disconnect(struct gapc_disconnect_ind const *param)
 	if(param->reason!=CO_ERROR_REMOTE_USER_TERM_CON){
 		user_app_adv_start();
 	}else{
-		    // Not yet synced -- show the pairing QR code (image mode keeps its picture)
-    if(display_mode==1){
-    }
-    else if(cal_minute<0){
-        QR_draw(UPDATE_FLY);
-    }
+		// Not yet synced -- show the pairing QR code (image mode keeps its picture)
+		if(display_mode==1){
+		}
+		else if(cal_minute<0){
+			QR_draw(UPDATE_FLY);
+		}
 		else
-		clock_draw(UPDATE_FLY);
+			clock_draw(UPDATE_FLY);
 	}
-
 }
 
 
