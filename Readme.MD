@@ -22,23 +22,32 @@ This project utilizes discarded **Hema Electronic Shelf Label (ESL)** hardware f
 
 ## Supported screens
 
-The clock drives **black and white** panels only. The panel size normally comes from the configuration record in flash (`0x3A000`). If the record is missing or wrong (for example after swapping the panel), pick the size in the web app's Display card (**Panel** dropdown, firmware 0xA50f0026 or later); the clock restarts to apply it. The **Test pattern** button next to it draws a border, corner blocks, size, grey/black swatches and line patterns to check the result.
+The clock drives every panel in **black and white** only (the red plane of tri-colour panels is not driven); the table lists what has been tested. The panel size normally comes from the configuration record in flash (`0x3A000`). If the record is missing or wrong (for example after swapping the panel), pick the size in the web app's Display card (**Panel** dropdown, firmware 0xA50f0026 or later); the clock restarts to apply it. The **Test pattern** button next to it draws a border, corner blocks, size, grey/black swatches and line patterns to check the result.
 
-| Panel | Resolution (landscape) | Status |
-|-------|------------------------|--------|
-| HEMA HINK-E0213A41 (2.13") | 212 x 104 | Reference panel, populated on the HMCLOCK board (pinout: `Hardware/HINK-E0213A41-FPC.md`) |
-| 2.13" 250 x 122 (for example HINK-E0213A22-A0) | 250 x 122 | Select `250 x 122`. Used in black/white mode only; on the HMCLOCK board its contrast was weak, most likely because the board's boost circuit was sized for the A41 |
-| 2.9" | 296 x 128 | Layout only, not verified on hardware |
+| Size | Colors | Interface | Model | Main MCU | Resolution (landscape) | Disassembly | LED | Pinout | Status |
+|------|--------|-----------|-------|----------|------------------------|-------------|-----|--------|--------|
+| 2.13" | Black/White | Soldered | HINK-E0213A41/A55 | IL3897 / SSD1675B | 212×104 | Hard | Yes | `pinout_1/0.xlsx`, `Hardware/HINK-E0213A41-FPC.md` | Tested working (HINK-E0213A41-FPC). Reference panel, populated on the HMCLOCK board |
+| 2.13" | Black/White | Soldered | HINK-E0213A53-FPC-A0 | ? | ? | ? | ? | ? | Tested working |
+| 2.13" | Black/White | Socket | HINK-E0213A07-A1 | ? | ? | ? | ? | ? | Tested working |
+| 2.13" | Black/White | Socket | OPM021B1 | IL3895 / SSD1673A | 250×122 | Hard | Yes | `pinout_0.xlsx` | Not tested |
+| 2.13" | Black/White/Red | ? | HINK-E0213A22-A0 | ? | 250×122 | ? | ? | ? | Select `250 x 122`; black/white only. On the HMCLOCK board its contrast was weak, most likely because the board's boost circuit was sized for the A41 |
+| 2.13" | Black/White/Red | Soldered | HINK-E0213A67 | IL3897 | 250×122 | Hard | 3-Color | `pinout_0.xlsx` | Not tested |
+| 2.9" | Black/White/Red | Socket | HINK-E029A10 | IL3897 | 296×128 | Easy | Yes | `pinout_0.xlsx` | Not tested (layout only, not verified on hardware) |
 
 Notes:
 
-* Tri-colour (black/white/red) panels are not supported: the red plane is not driven.
+* Tri-colour (black/white/red) panels show black and white only; the red plane is not driven.
 * The size cannot be read from the panel itself, so it must match the attached panel.
 * Only these three sizes have a screen layout. Any other size falls back to the 212 x 104 layout.
 
 ---
 
 ## Changelog
+
+### 0xA50f0027
+
+* **Advertising cleanup:** the advertising state is always cleared when advertising completes, and the version tag in the advertising data uses company ID `0xFFFF`.
+* **Docs:** the supported-screens table now merges the Hema ESL model list with tested status (A41, A53 and A07 tested working).
 
 ### 0xA50f0026
 
@@ -216,10 +225,9 @@ Case design files are stored in the `3D/` directory. It features a sliding lid d
 
 ## About Hema ESL (Electronic Shelf Label)
 
-The types of Hema ESL screens used in this project are listed below:
+The Hema ESL screen models used in this project are listed under [Supported screens](#supported-screens).
 
-| Size | Colors | Interface Type | Model | Main MCU | Resolution | Disassembly Difficulty | LED | Pinout File |
-| ------ | --- | ------ | ----------------- | ----------------- | ------- | ---- | --- | --------------- |
+------ | --- | ------ | ----------------- | ----------------- | ------- | ---- | --- | --------------- |
 | 2.13" | Black/White | Soldered | HINK-E0213A41/A55 | IL3897 / SSD1675B | 212×104 | Hard | Yes | pinout_1/0.xlsx |
 | 2.13" | Black/White | Socket | OPM021B1 | IL3895 / SSD1673A | 250×122 | Hard | Yes | pinout_0.xlsx |
 | 2.13" | Black/White/Red | Soldered | HINK-E0213A67 | IL3897 | 250×122 | Hard | 3-Color | pinout_0.xlsx |
