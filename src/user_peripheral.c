@@ -545,6 +545,7 @@ void user_app_disconnect(struct gapc_disconnect_ind const *param)
 
 	app_connection_idx = -1; // Reset the connection index to invalid
 	img_abort();             // drop any half-received image upload
+	ota_abort();             // drop any half-received firmware update
 	adv_state = 0; // Mark as not advertising
 
 	// Restart advertising unless the remote user initiated the disconnect;

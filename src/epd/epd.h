@@ -27,6 +27,7 @@ int sf_page_write(int addr, u8 *buf, int size);
 int sf_read(int addr, int len, u8 *buf);
 int selflash(int otp_boot);
 int ota_handle(u8 *buf, int len);
+void ota_abort(void);
 int img_begin(int xres, int yres);
 int img_chunk(int seq, u8 *d, int n);
 int img_end(u32 crc);

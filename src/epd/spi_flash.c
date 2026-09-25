@@ -595,6 +595,7 @@ static u8  ota_buf[256];
 static int firm_addr;
 static int firm_size;
 static int firm_flag;
+static int ota_erase_end;	// end of the already-erased part of the target slot
 
 // Running CRC32 over the OTA payload as it's received, checked against the
 // CRC the client embedded in the image header (page 0, offset 8) before we
@@ -607,6 +608,21 @@ static int ota_crc_len;
 static int ota_crc_valid;
 
 
+// The new image's 4 header bytes (magic + generation flag). Page 0 is written
+// with these left erased (0xff) so a half-received image can never look
+// bootable; they are programmed at 0xa4 once the CRC has passed.
+static u8 ota_hdr[4];
+
+// Abandon an update in progress (client disconnected / sent 0xa5): forget the
+// transfer and let the chip sleep again. The half-written slot stays invalid.
+void ota_abort(void)
+{
+	if(!ota_state) return;
+	ota_state = 0;
+	ota_crc_valid = 0;
+	arch_set_sleep_mode(ARCH_EXT_SLEEP_ON);
+}
+
 int ota_handle(u8 *buf, int len)
 {
 	u8 *pbuf = ota_buf;
@@ -614,11 +630,17 @@ int ota_handle(u8 *buf, int len)
 	int image_addr[2];
 	int image_flag[2];
 
-	if(buf[0]==0xa0){
+	// Every command except a start/abort needs a started update; without this a
+	// stray write would hit firm_addr == 0 (the boot header).
+	if(buf[0]>=0xa2 && buf[0]<=0xa4 && !ota_state) return -1;
+
+	if(buf[0]==0xa5){
+		ota_abort();
+	}else if(buf[0]==0xa0){
 		// Update starting
 		// Erase the inactive firmware slot first
 		if(len<4) return -1;
-		ota_state = 1;
+		ota_state = 0;
 		ota_crc = 0;
 		ota_crc_len = 0;
 		ota_crc_valid = 0;
@@ -634,6 +656,18 @@ int ota_handle(u8 *buf, int len)
 		image_addr[0] = p32[1];
 		image_addr[1] = p32[2];
 		printk("image0: %08x   image1: %08x\n", image_addr[0], image_addr[1]);
+
+		// Trust the product header only if it is valid and sane: magic present,
+		// slots 4K-aligned and below the header itself.
+		if(pbuf[0]!=0x70 || pbuf[1]!=0x52 || firm_size==0 ||
+		   (image_addr[0]|image_addr[1])&0xfff ||
+		   image_addr[0]<=0 || image_addr[1]<=0 ||
+		   image_addr[0]>=0x38000 || image_addr[1]>=0x38000 ||
+		   image_addr[0]==image_addr[1]){
+			printk("OTA rejected: bad product header or size\n");
+			fspi_exit();
+			return -1;
+		}
 
 		// Read the image headers
 		sf_read(image_addr[0], 32, pbuf+0 );
@@ -653,9 +687,20 @@ int ota_handle(u8 *buf, int len)
 		int new_id = active^1;
 
 		firm_addr = image_addr[new_id];
-		// Erase flash
-		printk("Erase %08x - %08x ...\n", firm_addr, firm_addr+firm_size+64);
-		sf_erase(firm_addr, firm_size+64, 1);
+
+		// The image (plus its 64-byte prologue) must fit before the next region:
+		// the other slot if it lies above, else the product header at 0x38000.
+		int slot_end = (image_addr[new_id] < image_addr[active]) ? image_addr[active] : 0x38000;
+		if(firm_size+64 > slot_end-firm_addr){
+			printk("OTA rejected: image does not fit slot\n");
+			fspi_exit();
+			return -1;
+		}
+		ota_state = 1;
+
+		// Erase lazily, one 4K sector per page write (see 0xa3): erasing the
+		// whole slot here blocks long enough to drop the BLE link.
+		ota_erase_end = firm_addr;
 
 		arch_set_sleep_mode(ARCH_SLEEP_OFF);
 	}else if(buf[0]==0xa2){
@@ -685,6 +730,9 @@ int ota_handle(u8 *buf, int len)
 				*(u32*)(ota_buf+8),
 				*(u32*)(ota_buf+28)
 			);
+			// Hold back the magic/flag until the CRC has passed (see 0xa4)
+			memcpy(ota_hdr, ota_buf, 4);
+			memset(ota_buf, 0xff, 4);
 		}
 		if(avail>0){
 			ota_crc = crc32(ota_crc, ota_buf+page_off, avail);
@@ -692,6 +740,11 @@ int ota_handle(u8 *buf, int len)
 		}
 
 		int addr = firm_addr+(ota_state-1)*256;
+		if(addr+256 > firm_addr+((firm_size+64+255)&~255)) return -1;	// more pages than announced
+		while(addr+256 > ota_erase_end){
+			sf_sector_erase(ERASE_4K, ota_erase_end, 1);
+			ota_erase_end += 0x1000;
+		}
 		sf_page_write(addr, ota_buf, 256);
 		int status = sf_wait();
 
@@ -706,18 +759,16 @@ int ota_handle(u8 *buf, int len)
 		if(!crc_ok){
 			printk("OTA CRC check FAILED (got %08x/%d bytes, expected %08x/%d bytes) - aborting update\n",
 				ota_crc, ota_crc_len, ota_crc_expect, firm_size);
-			// Invalidate the new image's header magic so a stray reset
-			// (watchdog, power blip) can't later boot into it based on
-			// its already-written generation flag -- writing zeros over
-			// already-programmed flash needs no re-erase.
-			u8 zero[4] = {0, 0, 0, 0};
-			sf_page_write(firm_addr, zero, 4);
+			// Nothing to undo: the new image's magic/flag were never
+			// programmed (page 0 keeps them erased), so it can't boot.
+		}else{
+			// CRC passed: programming the held-back magic/flag (erased
+			// 0xff -> value, no erase needed) is what makes the image valid.
+			sf_page_write(firm_addr, ota_hdr, 4);
 			sf_wait();
 		}
 
-		ota_state = 0;
-		ota_crc_valid = 0;
-		arch_set_sleep_mode(ARCH_EXT_SLEEP_ON);
+		ota_abort();
 
 		if(crc_ok){
 			// Remap addres 0x00 to ROM and force execution
