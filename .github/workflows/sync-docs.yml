@@ -19,7 +19,10 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Copy web app into docs/
-        run: cp WebApp/WebApp_EN/index.html docs/index.html
+        run: |
+          cp WebApp/WebApp_EN/index.html docs/index.html
+          # Stamp the footer so the published page shows which commit it was built from
+          sed -i "s|__WEB_BUILD__|${GITHUB_SHA::7}, $(date -u '+%Y-%m-%d %H:%M') UTC|" docs/index.html
 
       - name: Commit if changed
         run: |
