@@ -108,6 +108,8 @@ Open the [web control panel](https://terenceang.github.io/HMCLOCK-EN/) in Chrome
 
 When powered on for the first time, it will show a pairing page. Scan the QR code to open the web page and pair.
 
+![Pairing Prompt](./images/pairing.jpg)
+
 
 ---
 
