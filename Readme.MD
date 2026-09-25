@@ -20,6 +20,24 @@ This project utilizes discarded **Hema Electronic Shelf Label (ESL)** hardware f
 
 ---
 
+## Supported screens
+
+The panel size and colour type normally come from the configuration record in flash (`0x3A000`). If the record is missing or wrong (for example after swapping the panel), pick the values in the web app's Connection card (**Panel size** / **Panel colour type**, firmware 0xA50f001D or later); the clock restarts to apply them.
+
+| Panel | Resolution (landscape) | Colours | Web app settings | Status |
+|-------|------------------------|---------|------------------|--------|
+| HEMA HINK-E0213A41 (2.13") | 212 x 104 | Black / white | Auto | Reference panel, populated on the HMCLOCK board (pinout: `Hardware/HINK-E0213A41-FPC.md`) |
+| HINK-E0213A22-A0 (2.13") | 250 x 122 | Black / white / red | Size `250 x 122`, colour `Black / White / Red` | Supported through the overrides. Red is drawn by the driver; image upload is still black and white only |
+| 2.9" panel | 296 x 128 | Black / white / red | Size `296 x 128`, colour `Black / White / Red` | Layout only, not verified on hardware |
+
+Notes:
+
+* The size and colour cannot be read from the panel itself, so they must match the attached panel.
+* Only these three sizes have a screen layout. Any other size falls back to the 212 x 104 layout.
+* Fast per-minute updates use a black/white waveform. If a tri-colour panel shows noise or ghosting after the first full refresh, that waveform is the first thing to check.
+
+---
+
 ## Changelog
 
 ### 0xA50f0015

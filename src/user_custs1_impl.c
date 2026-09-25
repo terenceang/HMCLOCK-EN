@@ -716,8 +716,8 @@ static void draw_calendar_card(int x1, int y1, int x2, int y2)
 
 	draw_rect(x1, y1, x2, y2, BLACK);
 
-	// Weekday header: filled black bar with white (inverted) text
-	draw_box(x1+1, y1+1, x2-1, y1+header_h, BLACK);
+	// Weekday header: filled bar (red on BWR panels, black otherwise) with white (inverted) text
+	draw_box(x1+1, y1+1, x2-1, y1+header_h, RED);
 	select_font(0); // sfont
 	draw_text_centered_kerned_bold(cx, y1+CAL_WEEKDAY_Y_BIAS, wday_str[wday], CAL_WEEKDAY_KERNING, WHITE);
 

@@ -47,8 +47,15 @@ void draw_pixel(int x, int y, int color)
 	}else{
 		fb_bw[byte_pos] &= ~bit_mask;
 	}
-	if(scr_mode&EPD_BWR && color==RED){
-		fb_rr[byte_pos] |=  bit_mask;
+	// Red plane (BWR panels): RED sets it, any other colour clears it so
+	// drawing over a red area (e.g. white text on a red bar) doesn't stay red.
+	// On black/white panels RED just draws black.
+	if(scr_mode&EPD_BWR){
+		if(color==RED){
+			fb_rr[byte_pos] |=  bit_mask;
+		}else{
+			fb_rr[byte_pos] &= ~bit_mask;
+		}
 	}
 }
 
