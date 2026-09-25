@@ -36,6 +36,8 @@ int img_present(int xres, int yres);
 int img_render(int xres, int yres);
 int img_mode_get(void);
 void img_mode_set(int mode);
+void panel_color_set(int colour);
+extern int panel_color_ovr;
 
 // Boot/flash diagnostics filled in by selflash(); readable via the FF04
 // characteristic (diag_val_update()). See spi_flash.c for the byte layout.

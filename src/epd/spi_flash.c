@@ -505,6 +505,11 @@ static void selflash_install(int firm_size, int slot0, int slot1)
 	printk("Slot install done.\n");
 }
 
+// Colour override kept in the display-mode record (see IMG_MODE below):
+// 0 = follow the panel record, 1 = force black/white, 2 = force black/white/red.
+int panel_color_ovr;
+static void mode_rec_read(u8 *rec);
+
 int selflash(int otp_boot)
 {
 	u8 pbuf[256];
@@ -554,6 +559,11 @@ int selflash(int otp_boot)
 		detect_mode = pbuf[9]? EPD_BWR : EPD_BW;
 		printk("EPD  Res: %dx%d  %d\n", xres, yres, pbuf[9]);
 	}
+
+	// A colour override chosen from the web app wins over the panel record
+	mode_rec_read(pbuf);
+	panel_color_ovr = (pbuf[2]==1 || pbuf[2]==2)? pbuf[2] : 0;
+	if(panel_color_ovr) detect_mode = (panel_color_ovr==2)? EPD_BWR : EPD_BW;
 
 	int region_table = (int)&Region$$Table$$Base;
 	int firm_size = *(u32*)(region_table+0x10) - 0x07fc0000;
@@ -945,25 +955,62 @@ int img_render(int xres, int yres)
 	return 0;
 }
 
+// Display-mode record at IMG_MODE: {0xa5, mode, colour}. mode: 0 = clock,
+// 1 = image. colour: 0xff (left erased) = unset, else the panel colour override.
+// A missing/invalid record reads as clock mode, no override.
+static void mode_rec_read(u8 *rec)
+{
+	sf_read(IMG_MODE, 3, rec);
+	if(rec[0]!=0xa5){
+		rec[1] = 0;
+		rec[2] = 0xff;
+	}
+}
+
+// Rewrite the record (a sector erase is needed to change either field)
+static void mode_rec_write(int mode, int colour)
+{
+	u8 rec[3] = {0xa5, (u8)mode, (u8)colour};
+
+	sf_sector_erase(ERASE_4K, IMG_MODE, 1);
+	sf_page_write(IMG_MODE, rec, (colour==0xff)? 2 : 3);
+	sf_wait();
+}
+
 // Persisted display mode: 0 = clock, 1 = image
 int img_mode_get(void)
 {
-	u8 rec[2];
+	u8 rec[3];
 
 	fspi_init();
-	sf_read(IMG_MODE, 2, rec);
+	mode_rec_read(rec);
 	fspi_exit();
-	return (rec[0]==0xa5 && rec[1]==1) ? 1 : 0;
+	return (rec[1]==1) ? 1 : 0;
 }
 
 void img_mode_set(int mode)
 {
-	if(img_mode_get()==mode) return;
-	u8 rec[2] = {0xa5, (u8)mode};
+	u8 rec[3];
 
 	fspi_init();
-	sf_sector_erase(ERASE_4K, IMG_MODE, 1);
-	sf_page_write(IMG_MODE, rec, 2);
-	sf_wait();
+	mode_rec_read(rec);
+	if((rec[1]==1) != (mode==1)) mode_rec_write(mode, rec[2]);
 	fspi_exit();
+}
+
+// Choose the panel colour type (0 = auto from the panel record, 1 = black/white,
+// 2 = black/white/red). The driver is set up once at boot, so a change is
+// stored and the chip restarts to apply it.
+void panel_color_set(int colour)
+{
+	u8 rec[3];
+
+	if(colour<0 || colour>2 || colour==panel_color_ovr) return;
+
+	fspi_init();
+	mode_rec_read(rec);
+	mode_rec_write(rec[1], colour? colour : 0xff);
+	fspi_exit();
+
+	SetWord16(SYS_CTRL_REG, (GetWord16(SYS_CTRL_REG) & ~REMAP_ADR0) | SW_RESET );
 }
