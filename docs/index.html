@@ -948,7 +948,7 @@
         // The clock resets on the final command, so that write is expected to drop the link.
         if (finishing) notify('Update sent. The clock is restarting with the new firmware.', 'success');
         else {
-          notify('Connection ended during the update. Check the clock and reconnect.', 'warning');
+          notify('Connection ended during the update at ' + Math.min(Math.round(100 * sent / totalSize), 100) + '% (' + (error.message || error) + '). Reconnecting...', 'warning');
           // Link still up (GATT error, not a drop): tell the clock to forget the half-received update
           if (connected) try { await longValue.writeValueWithResponse(Uint8Array.of(0xa5, 0, 0, 0)); } catch (e) { /* link gone: the clock aborts on disconnect */ }
         }
@@ -960,8 +960,14 @@
 
       // The clock reboots after the last command: give it time, then reconnect
       // (no chooser needed for a device we already paired with).
-      if (finishing) {
-        const dev = lastDevice;
+      const dev = lastDevice;
+      if (!finishing) {
+        // Update died part-way: the clock aborts it on disconnect; bring the link back
+        for (let i = 0; i < 5 && dev && !connected; i++) {
+          await new Promise(r => setTimeout(r, 4000));
+          await connectToDevice(dev);
+        }
+      } else {
         // The clock resets inside the final command, so it never replies: a reply
         // (acked) means the CRC check failed and it did not restart.
         if (acked) {
