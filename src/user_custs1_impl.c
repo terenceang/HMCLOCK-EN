@@ -534,6 +534,13 @@ static void epd_commit(void)
 }
 
 
+// Module size for the 31x31 QR codes: scale 4 (124px) on the tall 296x128
+// panel, scale 3 (93px) where a 124px block would not fit (212x104, 250x122).
+static int qr_scale(void)
+{
+	return (layout_yres() >= 128)? 4 : 3;
+}
+
 void QR_draw(int mode)
 {
 	char tbuf[16];
@@ -549,18 +556,20 @@ void QR_draw(int mode)
 
 	fb_clear();
 
-	// QR code: fixed scale-3 (93x93) block on the left, vertically centered --
+	// QR code: block sized to the panel on the left, vertically centered --
 	// on the 212x104 reference panel this lands exactly at the original (5,5).
+	int scale = qr_scale();
+	int side  = 31*scale;
 	int qr_x = xres*5/212;
-	int qr_y = (yres - 93)/2;
-	int qcy  = qr_y + 93/2;   // QR vertical center = screen optical center
-	draw_qr_code(qr_x, qr_y, 3, QR_31x31);
+	int qr_y = (yres - side)/2;
+	int qcy  = qr_y + side/2;   // QR vertical center = screen optical center
+	draw_qr_code(qr_x, qr_y, scale, QR_31x31);
 
 	// Text column: everything right of the QR block between equal side margins.
 	// Rows use pen-y offsets from qcy; sfont glyphs render at pen-y+5..pen-y+14
 	// (baseline at +14). The rhythm is symmetric about the divider: bands
 	// -42..-33, -23..-14, +14..+23, +33..+42 -- 10px inside groups, 14px between.
-	int col_x1 = qr_x + 103;
+	int col_x1 = qr_x + side + 10;
 	int col_x2 = xres - 10;
 	int col_cx = (col_x1 + col_x2)/2;
 
@@ -593,10 +602,8 @@ void LB_draw()
 	int xres = layout_xres();
 	int yres = layout_yres();
 
-	// Battery QR: scale 4 on the largest panel, 3 where a 124px block would not
-	// fit; centered on the screen. (The old hard-coded scale-4 position overflew
-	// the 212x104 panel's height.)
-	int scale = (yres >= 128)? 4 : 3;
+	// Battery QR: centered on the screen at the panel's QR scale.
+	int scale = qr_scale();
 	int side  = 31*scale;
 
 	epd_hw_open();
