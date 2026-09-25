@@ -330,7 +330,11 @@ void epd_update(void)
 {
 	int seq;
 
-	if(update_mode==UPDATE_FULL){
+	// The fast/fly LUTs are black/white transition tables that read the second
+	// RAM as the previous frame. On a tri-colour panel that RAM holds the red
+	// plane, so they would draw red as black. BWR panels therefore always use
+	// the panel's built-in full waveform, which handles all three colours.
+	if(update_mode==UPDATE_FULL || (scr_mode&EPD_BWR)){
 		seq = 0xf7;
 	}else{
 		if(update_mode==UPDATE_FAST){
