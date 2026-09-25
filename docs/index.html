@@ -121,6 +121,9 @@
               <p id="panel_size" class="font-normal text-gray-500 dark:text-slate-400">--</p>
               <p class="text-gray-500 dark:text-slate-400 text-sm mt-1">Panel temperature (at boot)</p>
               <p id="panel_temp" class="font-normal text-gray-500 dark:text-slate-400">--</p>
+              <button id="lut-button" title="Connect to the clock first" class="mt-2 bg-slate-600 text-white text-sm px-3 py-1.5 rounded-lg btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
+                <i class="fa fa-list-alt"></i> Dump waveform to log
+              </button>
               <label for="panel-size" class="block text-gray-500 dark:text-slate-400 text-sm mt-1">Panel size</label>
               <select id="panel-size" title="Connect to the clock first" class="text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 opacity-50 cursor-not-allowed" disabled>
                 <option value="0">Auto (panel record)</option>
@@ -556,7 +559,8 @@
       document.getElementById('calibration-button'),
       document.getElementById('panel-color'),
       document.getElementById('panel-size'),
-      document.getElementById('test-button')
+      document.getElementById('test-button'),
+      document.getElementById('lut-button')
     ];
 
     function setDeviceButtonsEnabled(enabled) {
@@ -1559,6 +1563,39 @@
     }
 
     // Event bindings
+    // Read the waveform + drive voltages the controller loaded from its OTP (7 chunks of 16 bytes
+    // over the status characteristic) and print them in the log, laid out like lut_fly_100 in epd.c
+    async function onLutDump() {
+      const button = document.getElementById('lut-button');
+      setButtonEnabled(button, false);
+      const hex = a => Array.from(a, b => '0x' + b.toString(16).padStart(2, '0')).join(', ');
+      const buf = new Uint8Array(112);
+      try {
+        for (let n = 0; n < 7; n++) {
+          await longValue.writeValueWithResponse(Uint8Array.of(0x99, n));
+          let dv = null;
+          for (let t = 0; t < 5 && !dv; t++) {
+            await new Promise(r => setTimeout(r, 100));
+            const v = await longValue.readValue();
+            if (v.byteLength >= 18 && v.getUint8(0) === 0xd9 && v.getUint8(1) === n) dv = v;
+          }
+          if (!dv) throw new Error('no reply for chunk ' + n + ' (firmware too old?)');
+          buf.set(new Uint8Array(dv.buffer, dv.byteOffset + 2, 16), n * 16);
+        }
+        console.log('OTP waveform (107 bytes), same layout as lut_fly_100:');
+        for (let i = 0; i < 5; i++) console.log('LUT' + i + ':   ' + hex(buf.slice(i * 10, i * 10 + 10)));
+        for (let i = 0; i < 10; i++) console.log('Group' + i + ': ' + hex(buf.slice(50 + i * 5, 55 + i * 5)));
+        console.log('VGH VSH1 VSH2 VSL VCOM FR1 FR2: ' + hex(buf.slice(100, 107)));
+        toast('Waveform written to the device log.', 'success');
+      } catch (error) {
+        toast('Waveform dump failed: ' + (error.message || error), 'error');
+      } finally {
+        try { await longValue.writeValueWithResponse(Uint8Array.of(0x99, 0xff)); } catch (e) { /* restores the status value; link may be gone */ }
+        setButtonEnabled(button, connected);
+      }
+    }
+    document.getElementById('lut-button').addEventListener('click', onLutDump);
+
     // Display test / calibration screen; Clock + Calendar (or the next redraw) brings the clock back
     document.getElementById('test-button').addEventListener('click', async () => {
       try {
