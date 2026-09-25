@@ -960,33 +960,25 @@
 
       // The clock reboots after the last command: give it time, then reconnect
       // (no chooser needed for a device we already paired with).
+      // Either way the clock has dropped (or will drop) the link: a failed update
+      // is aborted on its side at disconnect, a good one resets inside the final
+      // command. Bring the link back, then check what is running.
+      if (acked) {
+        // The reset means no reply, so a reply means the CRC check failed and it did not restart.
+        notify('The clock rejected the firmware (CRC check failed) and did not restart. Nothing was changed - try again.', 'error');
+        return;
+      }
+      // After a good update the browser may need up to the BLE supervision timeout to notice the dropped link
+      for (let i = 0; i < 60 && finishing && connected; i++) await new Promise(r => setTimeout(r, 500));
       const dev = lastDevice;
-      if (!finishing) {
-        // Update died part-way: the clock aborts it on disconnect; bring the link back
-        for (let i = 0; i < 5 && dev && !connected; i++) {
-          await new Promise(r => setTimeout(r, 4000));
-          await connectToDevice(dev);
-        }
-      } else {
-        // The clock resets inside the final command, so it never replies: a reply
-        // (acked) means the CRC check failed and it did not restart.
-        if (acked) {
-          notify('The clock rejected the firmware (CRC check failed) and did not restart. Nothing was changed - try again.', 'error');
-          return;
-        }
-        // Otherwise it is restarting; the browser may need up to the BLE
-        // supervision timeout to notice the dropped link before we can reconnect.
-        for (let i = 0; i < 60 && connected; i++) await new Promise(r => setTimeout(r, 500));
-        for (let i = 0; i < 5 && dev && !connected; i++) {
-          await new Promise(r => setTimeout(r, 4000));
-          await connectToDevice(dev);
-        }
-        // Confirm what is actually running now
-        if (connected) {
-          const running = document.getElementById('firmware_version').textContent;
-          if (running === 'v' + firm_ver) notify('Firmware v' + firm_ver + ' is running.', 'success');
-          else notify('The clock restarted but reports ' + running + ', not v' + firm_ver + '. The update did not take effect.', 'warning');
-        }
+      for (let i = 0; i < 5 && dev && !connected; i++) {
+        await new Promise(r => setTimeout(r, 4000));
+        await connectToDevice(dev);
+      }
+      if (finishing && connected) {
+        const running = document.getElementById('firmware_version').textContent;
+        if (running === 'v' + firm_ver) notify('Firmware v' + firm_ver + ' is running.', 'success');
+        else notify('The clock restarted but reports ' + running + ', not v' + firm_ver + '. The update did not take effect.', 'warning');
       }
     }
 
