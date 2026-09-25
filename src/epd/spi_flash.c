@@ -505,10 +505,8 @@ static void selflash_install(int firm_size, int slot0, int slot1)
 	printk("Slot install done.\n");
 }
 
-// Panel overrides kept in the display-mode record (see IMG_MODE below):
-// colour 0 = follow the panel record, 1 = force black/white, 2 = force black/white/red;
-// size 0 = follow the panel record, 1..3 = force layouts[size-1].
-int panel_color_ovr;
+// Panel size override kept in the display-mode record (see IMG_MODE below):
+// 0 = follow the panel record, 1..3 = force layouts[size-1].
 int panel_size_ovr;
 static void mode_rec_read(u8 *rec);
 
@@ -558,15 +556,12 @@ int selflash(int otp_boot)
 	if(xres<512 && yres<512){
 		detect_w = xres;
 		detect_h = yres;
-		detect_mode = pbuf[9]? EPD_BWR : EPD_BW;
 		printk("EPD  Res: %dx%d  %d\n", xres, yres, pbuf[9]);
 	}
 
-	// Colour / size overrides chosen from the web app win over the panel record
+	// A size chosen from the web app wins over the panel record
 	mode_rec_read(pbuf);
-	panel_color_ovr = (pbuf[2]==1 || pbuf[2]==2)? pbuf[2] : 0;
-	panel_size_ovr  = (pbuf[3]>=1 && pbuf[3]<=3)? pbuf[3] : 0;
-	if(panel_color_ovr) detect_mode = (panel_color_ovr==2)? EPD_BWR : EPD_BW;
+	panel_size_ovr = (pbuf[3]>=1 && pbuf[3]<=3)? pbuf[3] : 0;
 	if(panel_size_ovr){
 		detect_w = layouts[panel_size_ovr-1].yres;
 		detect_h = layouts[panel_size_ovr-1].xres;
@@ -962,9 +957,10 @@ int img_render(int xres, int yres)
 	return 0;
 }
 
-// Display-mode record at IMG_MODE: {0xa5, mode, colour, size}. mode: 0 = clock,
-// 1 = image. colour / size: 0xff (left erased) = unset, else the panel override.
-// A missing/invalid record reads as clock mode, no overrides.
+// Display-mode record at IMG_MODE: {0xa5, mode, reserved, size}. mode: 0 = clock,
+// 1 = image. Byte 2 is reserved (it held a colour override in older builds and is
+// kept so existing records stay valid). size: 0xff (left erased) = unset, else the
+// panel size override. A missing/invalid record reads as clock mode, no override.
 static void mode_rec_read(u8 *rec)
 {
 	sf_read(IMG_MODE, 4, rec);
@@ -975,9 +971,9 @@ static void mode_rec_read(u8 *rec)
 }
 
 // Rewrite the record (a sector erase is needed to change any field)
-static void mode_rec_write(int mode, int colour, int size)
+static void mode_rec_write(int mode, int size)
 {
-	u8 rec[4] = {0xa5, (u8)mode, (u8)colour, (u8)size};
+	u8 rec[4] = {0xa5, (u8)mode, 0xff, (u8)size};
 
 	sf_sector_erase(ERASE_4K, IMG_MODE, 1);
 	sf_page_write(IMG_MODE, rec, 4);
@@ -1001,23 +997,22 @@ void img_mode_set(int mode)
 
 	fspi_init();
 	mode_rec_read(rec);
-	if((rec[1]==1) != (mode==1)) mode_rec_write(mode, rec[2], rec[3]);
+	if((rec[1]==1) != (mode==1)) mode_rec_write(mode, rec[3]);
 	fspi_exit();
 }
 
-// Choose the panel colour type (0 = auto from the panel record, 1 = black/white,
-// 2 = black/white/red) and size (0 = auto, 1..3 = layouts[size-1]). The driver
-// is set up once at boot, so a change is stored and the chip restarts to apply it.
-void panel_config_set(int colour, int size)
+// Choose the panel size (0 = auto from the panel record, 1..3 = layouts[size-1]).
+// The driver is set up once at boot, so a change is stored and the chip restarts
+// to apply it.
+void panel_size_set(int size)
 {
 	u8 rec[4];
 
-	if(colour<0 || colour>2 || size<0 || size>3) return;
-	if(colour==panel_color_ovr && size==panel_size_ovr) return;
+	if(size<0 || size>3 || size==panel_size_ovr) return;
 
 	fspi_init();
 	mode_rec_read(rec);
-	mode_rec_write(rec[1], colour? colour : 0xff, size? size : 0xff);
+	mode_rec_write(rec[1], size? size : 0xff);
 	fspi_exit();
 
 	SetWord16(SYS_CTRL_REG, (GetWord16(SYS_CTRL_REG) & ~REMAP_ADR0) | SW_RESET );

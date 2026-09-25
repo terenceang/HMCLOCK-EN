@@ -203,12 +203,12 @@ void user_app_init(void)
 	// if flash didn't have a valid pinout or the panel isn't detected on it.
 	int have_flash_pinout = detect_config0 || detect_config1;
 	if(have_flash_pinout){
-		epd_hw_init(detect_config0, detect_config1, detect_w, detect_h, detect_mode | ROTATE_3);
+		epd_hw_init(detect_config0, detect_config1, detect_w, detect_h, ROTATE_3);
 	}
 	if(!have_flash_pinout || epd_detect()==0){
-		epd_hw_init(0x23200700, 0x05210006, detect_w, detect_h, detect_mode | ROTATE_3);
+		epd_hw_init(0x23200700, 0x05210006, detect_w, detect_h, ROTATE_3);
 		if(epd_detect()==0){
-			epd_hw_init(0x23111000, 0x07210120, detect_w, detect_h, detect_mode | ROTATE_3);
+			epd_hw_init(0x23111000, 0x07210120, detect_w, detect_h, ROTATE_3);
 			epd_detect();
 		}
 	}

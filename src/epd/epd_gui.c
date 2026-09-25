@@ -12,7 +12,6 @@ int fb_h;
 
 #define FB_SIZE 4736
 u8 fb_bw[FB_SIZE];
-u8 fb_rr[FB_SIZE];
 
 /******************************************************************************/
 
@@ -46,16 +45,6 @@ void draw_pixel(int x, int y, int color)
 		fb_bw[byte_pos] |= bit_mask;
 	}else{
 		fb_bw[byte_pos] &= ~bit_mask;
-	}
-	// Red plane (BWR panels): RED sets it, any other colour clears it so
-	// drawing over a red area (e.g. white text on a red bar) doesn't stay red.
-	// On black/white panels RED just draws black.
-	if(scr_mode&EPD_BWR){
-		if(color==RED){
-			fb_rr[byte_pos] |=  bit_mask;
-		}else{
-			fb_rr[byte_pos] &= ~bit_mask;
-		}
 	}
 }
 
@@ -534,9 +523,6 @@ static int wday = 0;
 void fb_test(void)
 {
 	memset(fb_bw, 0xff, scr_h*line_bytes);
-	if(scr_mode&EPD_BWR){
-		memset(fb_rr, 0x00, scr_h*line_bytes);
-	}
 
 	draw_rect(0, 0, fb_w-1, fb_h-1, BLACK);
 	draw_rect(1, 1, fb_w-2, fb_h-2, BLACK);

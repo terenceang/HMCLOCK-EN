@@ -16,7 +16,6 @@ int lut_size;
 
 int detect_w = 104;
 int detect_h = 212;
-int detect_mode = EPD_BW;
 u32 detect_config0 = 0;
 u32 detect_config1 = 0;
 
@@ -330,11 +329,7 @@ void epd_update(void)
 {
 	int seq;
 
-	// The fast/fly LUTs are black/white transition tables that read the second
-	// RAM as the previous frame. On a tri-colour panel that RAM holds the red
-	// plane, so they would draw red as black. BWR panels therefore always use
-	// the panel's built-in full waveform, which handles all three colours.
-	if(update_mode==UPDATE_FULL || (scr_mode&EPD_BWR)){
+	if(update_mode==UPDATE_FULL){
 		seq = 0xf7;
 	}else{
 		if(update_mode==UPDATE_FAST){
@@ -366,13 +361,6 @@ void epd_screen_update(void)
 	for(i=0; i<win_h*line_bytes; i++){
 		epd_data(fb_bw[i]);
 	}
-
-	if(scr_mode&EPD_BWR){
-		epd_cmd(0x26);
-		for(i=0; i<win_h*line_bytes; i++){
-			epd_data(fb_rr[i]);
-		}
-	}
 }
 
 
@@ -398,56 +386,11 @@ void epd_screen_clean(int mode)
 			epd_data(d);
 		}
 	}
-
-	if(scr_mode&EPD_BWR){
-		epd_cmd(0x26);  // write RAM for red(1)/other(0)
-		for(y=0; y<win_h; y++){
-			for(x=0; x<win_w; x+=8){
-				int d = 0x00;
-				if(mode==2){
-					if(y<(win_h/2)){
-						d = 0x00;
-					}else{
-						d = (x<win_w/2)? 0xff : 0x00;
-					}
-				}
-				epd_data(d);
-			}
-		}
-	}
 }
 
 
 /******************************************************************************/
 
-
-// Raw temperature register (16 bits, MSB first; value/256 = degrees C) read
-// back from the controller at boot, 0/0 if it was never read.
-u8 epd_temp[2];
-
-// Waveform (5x10 LUT rows + 10x5 groups) and drive voltages (VGH, VSH1, VSH2,
-// VSL, VCOM, FR1, FR2) the controller loaded from its OTP at that temperature:
-// 107 bytes, zero padded to 7 chunks of 16 for the web app's waveform dump.
-u8 epd_lut_otp[112];
-
-// Have the controller measure the temperature (internal sensor) and read the
-// result back. This is the value it picks the waveform from.
-static void epd_read_temp(void)
-{
-	u8 t[2] = {0, 0};
-
-	epd_cmd1(0x18, 0x80);   // internal temperature sensor
-	epd_cmd1(0x22, 0xb1);   // enable clock + analog, load temperature
-	epd_cmd(0x20);
-	delay_ms(10);           // let BUSY rise before waiting on it
-	epd_wait();
-	epd_cmd_read(0x1b, t, 2);
-	epd_temp[0] = t[0];
-	epd_temp[1] = t[1];
-
-	// The same command also loaded the OTP waveform for that temperature: read it back
-	epd_cmd_read(0x33, epd_lut_otp, 107);
-}
 
 int epd_detect(void)
 {
@@ -465,7 +408,6 @@ int epd_detect(void)
 	// means the pin reads "busy" even with no panel or the wrong pins wired,
 	// so it would report every guess as a hit.
 	retv = (epd_lut_size() > 0);
-	if(retv) epd_read_temp();
 	epd_hw_close();
 	return retv;
 }
@@ -479,8 +421,6 @@ int epd_detect(void)
 void epd_test(void)
 {
 	epd_hw_init(0x23200700, 0x05210006, 104, 212,         ROTATE_3);  // for 2.13 board BW
-//	epd_hw_init(0x23111000, 0x07210120, 122, 250, EPD_BWR|ROTATE_3);  // for 2.13 board BWR
-//	epd_hw_init(0x23200700, 0x05210006, 128, 296, EPD_BWR|ROTATE_3);  // for 2.90 board
 
 	epd_init();
 
@@ -519,7 +459,7 @@ void epd_test(void)
 void epd_test2(void)
 {
 
-	epd_init(104, 212, EPD_BWR|ROTATE_3);
+	epd_init(104, 212, ROTATE_3);
 
 	epd_load_lut(lut);
 //	epd_load_lut(lut_p);

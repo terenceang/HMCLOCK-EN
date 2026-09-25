@@ -22,23 +22,31 @@ This project utilizes discarded **Hema Electronic Shelf Label (ESL)** hardware f
 
 ## Supported screens
 
-The panel size and colour type normally come from the configuration record in flash (`0x3A000`). If the record is missing or wrong (for example after swapping the panel), pick the values in the web app's Connection card (**Panel size** / **Panel colour type**, firmware 0xA50f001D or later); the clock restarts to apply them.
+The clock drives **black and white** panels only. The panel size normally comes from the configuration record in flash (`0x3A000`). If the record is missing or wrong (for example after swapping the panel), pick the size in the web app's Connection card (**EPD Size** dropdown, firmware 0xA50f0026 or later); the clock restarts to apply it. The **Test pattern** button next to it draws a border, corner blocks, size, grey/black swatches and line patterns to check the result.
 
-| Panel | Resolution (landscape) | Colours | Web app settings | Status |
-|-------|------------------------|---------|------------------|--------|
-| HEMA HINK-E0213A41 (2.13") | 212 x 104 | Black / white | Auto | Reference panel, populated on the HMCLOCK board (pinout: `Hardware/HINK-E0213A41-FPC.md`) |
-| HINK-E0213A22-A0 (2.13") | 250 x 122 | Black / white / red | Size `250 x 122`, colour `Black / White / Red` | Supported through the overrides. Red is drawn by the driver; image upload is still black and white only |
-| 2.9" panel | 296 x 128 | Black / white / red | Size `296 x 128`, colour `Black / White / Red` | Layout only, not verified on hardware |
+| Panel | Resolution (landscape) | Status |
+|-------|------------------------|--------|
+| HEMA HINK-E0213A41 (2.13") | 212 x 104 | Reference panel, populated on the HMCLOCK board (pinout: `Hardware/HINK-E0213A41-FPC.md`) |
+| 2.13" 250 x 122 (for example HINK-E0213A22-A0) | 250 x 122 | Select `250 x 122`. Used in black/white mode only; on the HMCLOCK board its contrast was weak, most likely because the board's boost circuit was sized for the A41 |
+| 2.9" | 296 x 128 | Layout only, not verified on hardware |
 
 Notes:
 
-* The size and colour cannot be read from the panel itself, so they must match the attached panel.
+* Tri-colour (black/white/red) panels are not supported: the red plane is not driven.
+* The size cannot be read from the panel itself, so it must match the attached panel.
 * Only these three sizes have a screen layout. Any other size falls back to the 212 x 104 layout.
-* Fast per-minute updates use a black/white waveform. If a tri-colour panel shows noise or ghosting after the first full refresh, that waveform is the first thing to check.
 
 ---
 
 ## Changelog
+
+### 0xA50f0026
+
+* **Black and white only.** Removed the tri-colour (red plane) code and the panel-diagnostic experiments (waveform dump, temperature and refresh-time read-outs), which frees about 5 KB of RAM. The panel-size override stays.
+* **Web app:** QR deep link to one clock (`?n=DCLK-XXYYZZ`), optional auto time sync on connect, the EPD size shown with a size override and a Test pattern button, the clock's firmware version and the web build in the page, and a firmware update that detects a rejected image, verifies the running version and reconnects by itself.
+* **Firmware update hardening:** an update aborts cleanly on disconnect, ignores stray commands, validates the product header and slot size, and only programs the image header once the CRC has passed.
+* The pairing (QR) screen scales to the panel (larger QR on 296 x 128).
+* Build from the command line: see `Programming.md`.
 
 ### 0xA50f0015
 

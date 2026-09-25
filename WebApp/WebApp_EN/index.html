@@ -117,28 +117,14 @@
             <div>
               <p class="text-gray-500 dark:text-slate-400 text-sm">Device Name</p>
               <p id="device_name" class="font-normal text-gray-500 dark:text-slate-400">Not Connected</p>
-              <p class="text-gray-500 dark:text-slate-400 text-sm mt-1">EPD Size / Colours</p>
-              <p id="panel_size" class="font-normal text-gray-500 dark:text-slate-400">--</p>
-              <p class="text-gray-500 dark:text-slate-400 text-sm mt-1">Battery during last refresh (min)</p>
-              <p id="supply_min" class="font-normal text-gray-500 dark:text-slate-400">--</p>
-              <button id="lut-button" title="Connect to the clock first" class="mt-2 bg-slate-600 text-white text-sm px-3 py-1.5 rounded-lg btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
-                <i class="fa fa-list-alt"></i> Dump waveform to log
-              </button>
-              <p class="text-gray-500 dark:text-slate-400 text-sm mt-1">Last refresh time</p>
-              <p id="refresh_time" class="font-normal text-gray-500 dark:text-slate-400">--</p>
-              <label for="panel-size" class="block text-gray-500 dark:text-slate-400 text-sm mt-1">Panel size</label>
-              <select id="panel-size" title="Connect to the clock first" class="text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 opacity-50 cursor-not-allowed" disabled>
-                <option value="0">Auto (panel record)</option>
-                <option value="1">212 x 104</option>
-                <option value="2">250 x 122</option>
-                <option value="3">296 x 128</option>
-              </select>
-              <label for="panel-color" class="block text-gray-500 dark:text-slate-400 text-sm mt-1">Panel colour type</label>
-              <select id="panel-color" title="Connect to the clock first" class="text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 opacity-50 cursor-not-allowed" disabled>
-                <option value="0">Auto (panel record)</option>
-                <option value="1">Black / White</option>
-                <option value="2">Black / White / Red</option>
-              </select>
+              <p class="text-gray-500 dark:text-slate-400 text-sm mt-1">EPD Size</p>
+              <div class="flex flex-wrap items-center gap-2">
+                <p id="panel_size" class="font-normal text-gray-500 dark:text-slate-400">--</p>
+                <select id="panel-size" aria-label="Panel size override" title="Connect to the clock first" class="text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 opacity-50 cursor-not-allowed" disabled></select>
+                <button id="test-button" title="Connect to the clock first" class="bg-slate-600 text-white text-sm px-3 py-1 rounded-lg btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
+                  <i class="fa fa-th-large"></i> Test pattern
+                </button>
+              </div>
             </div>
           </div>
           <div class="flex items-center gap-3">
@@ -205,9 +191,6 @@
           <h2 id="h-display" class="font-semibold text-gray-700 dark:text-slate-200 flex items-center gap-2">
             <i class="fa fa-picture-o text-primary"></i> Display
           </h2>
-          <button id="test-button" title="Connect to the clock first" class="bg-slate-600 text-white px-4 py-2.5 rounded-lg btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
-            <i class="fa fa-th-large"></i> Test pattern
-          </button>
           <div class="flex gap-2" role="group" aria-label="Display mode">
             <button id="mode-clock-button" aria-pressed="true" class="mode-btn text-white px-4 py-2.5 rounded-lg btn-hover font-medium">
               <i class="fa fa-clock-o"></i> Clock + Calendar
@@ -561,10 +544,8 @@
       document.getElementById('setime-button'),
       document.getElementById('upfirm-button'),
       document.getElementById('calibration-button'),
-      document.getElementById('panel-color'),
       document.getElementById('panel-size'),
-      document.getElementById('test-button'),
-      document.getElementById('lut-button')
+      document.getElementById('test-button')
     ];
 
     function setDeviceButtonsEnabled(enabled) {
@@ -783,15 +764,10 @@
           panelW = cur_time.getUint16(11, true);
           panelH = cur_time.getUint16(13, true);
           showMode(cur_time.getUint8(15));
-          // Byte 16 (newer firmware): 1 = black/white/red panel
-          showRefreshTime(cur_time);
-          panelColor.value = cur_time.byteLength >= 18 ? cur_time.getUint8(17) : 0;
-          panelSize.value = cur_time.byteLength >= 19 ? cur_time.getUint8(18) : 0;
-          panelColorSupported = cur_time.byteLength >= 18;
-          panelSizeSupported = cur_time.byteLength >= 19;
-          panelCurrent = { color: panelColor.value, size: panelSize.value };
-          const colors = (cur_time.byteLength >= 17 ? (cur_time.getUint8(16) ? ', black/white/red' : ', black/white') : '');
-          document.getElementById('panel_size').textContent = panelW + ' x ' + panelH + ' px' + colors;
+          // Byte 16 (newer firmware): panel size override, 0 = follow the panel record
+          panelSizeSupported = cur_time.byteLength >= 17;
+          panelSize.value = panelSizeCurrent = panelSizeSupported ? String(cur_time.getUint8(16)) : '0';
+          document.getElementById('panel_size').textContent = panelW + ' x ' + panelH + ' px';
           setValueStyle('panel_size', false);
         } else {
           panelW = panelH = 0;
@@ -812,9 +788,7 @@
         checkSavedImage();
         connected = true;
         setDeviceButtonsEnabled(true);
-        // older firmware can't switch these
-        if (!panelColorSupported) setButtonEnabled(panelColor, false);
-        if (!panelSizeSupported) setButtonEnabled(panelSize, false);
+        if (!panelSizeSupported) setButtonEnabled(panelSize, false);   // older firmware can't switch it
         setPill('on');
         renderPreview();
 
@@ -918,31 +892,31 @@
       }
     }
 
-    // Panel colour (0 auto, 1 black/white, 2 black/white/red) and size (0 auto, 1..3 = the
-    // listed panels) overrides; the clock restarts to apply a change
-    const panelColor = document.getElementById('panel-color');
+    // Panel size override, shown next to the size the clock reports. Index + 1 is what the
+    // clock stores, so this list must match layouts[] in src/user_custs1_impl.c; 0 = follow the
+    // panel record. The clock restarts to apply a change.
+    const PANEL_SIZES = [[212, 104], [250, 122], [296, 128]];
     const panelSize = document.getElementById('panel-size');
-    let panelColorSupported = false, panelSizeSupported = false;
-    let panelCurrent = { color: '0', size: '0' };
-    async function onPanelConfig() {
+    panelSize.innerHTML = '<option value="0">Auto</option>' +
+      PANEL_SIZES.map(([w, h], i) => '<option value="' + (i + 1) + '">' + w + ' x ' + h + '</option>').join('');
+    let panelSizeSupported = false;
+    let panelSizeCurrent = '0';
+    panelSize.addEventListener('change', async () => {
       const dev = lastDevice;
-      const restore = () => { panelColor.value = panelCurrent.color; panelSize.value = panelCurrent.size; };
-      if (!await confirmDialog('Change panel settings?', 'The clock will restart to apply this. Choose the values that match the attached e-paper panel.', 'Change')) {
-        restore();
+      if (!await confirmDialog('Change panel size?', 'The clock will restart to apply this. Choose the size that matches the attached e-paper panel, or Auto to use the size stored in the panel record.', 'Change')) {
+        panelSize.value = panelSizeCurrent;
         return;
       }
       try {
-        await longValue.writeValueWithResponse(Uint8Array.of(0x97, Number(panelColor.value), Number(panelSize.value)));
+        await longValue.writeValueWithResponse(Uint8Array.of(0x97, Number(panelSize.value)));
         // A reply means the clock did not restart (unsupported or unchanged)
-        notify('The clock did not restart - the panel settings were not changed.', 'warning');
-        restore();
+        notify('The clock did not restart - the panel size was not changed.', 'warning');
+        panelSize.value = panelSizeCurrent;
         return;
       } catch (e) { /* expected: the clock restarts and drops the link */ }
-      notify('Restarting the clock to apply the panel settings...', 'info');
+      notify('Restarting the clock to apply the panel size...', 'info');
       await reconnectAfterReset(dev, true);
-    }
-    panelColor.addEventListener('change', onPanelConfig);
-    panelSize.addEventListener('change', onPanelConfig);
+    });
 
     async function onUpdate() {
       const upfirmButton = document.getElementById('upfirm-button');
@@ -1162,9 +1136,7 @@
       document.getElementById('time_drift').textContent = "";
       document.getElementById('firmware_version').textContent = "--";
       document.getElementById('panel_size').textContent = "--";
-      document.getElementById('supply_min').textContent = "--";
-      document.getElementById('refresh_time').textContent = "--";
-      ['device_name', 'panel_size', 'supply_min', 'firmware_version', 'current_voltage', 'current_time'].forEach(id => setValueStyle(id, true));
+      ['device_name', 'panel_size', 'firmware_version', 'current_voltage', 'current_time'].forEach(id => setValueStyle(id, true));
       document.getElementById('battery-bar').classList.add('hidden');
       document.getElementById('battery-note').textContent = '';
       deviceMode = null;
@@ -1566,64 +1538,11 @@
     }
 
     // Event bindings
-    // Read the waveform + drive voltages the controller loaded from its OTP (7 chunks of 16 bytes
-    // over the status characteristic) and print them in the log, laid out like lut_fly_100 in epd.c
-    async function onLutDump() {
-      const button = document.getElementById('lut-button');
-      setButtonEnabled(button, false);
-      const hex = a => Array.from(a, b => '0x' + b.toString(16).padStart(2, '0')).join(', ');
-      const buf = new Uint8Array(112);
-      try {
-        for (let n = 0; n < 7; n++) {
-          await longValue.writeValueWithResponse(Uint8Array.of(0x99, n));
-          let dv = null;
-          for (let t = 0; t < 5 && !dv; t++) {
-            await new Promise(r => setTimeout(r, 100));
-            const v = await longValue.readValue();
-            if (v.byteLength >= 18 && v.getUint8(0) === 0xd9 && v.getUint8(1) === n) dv = v;
-          }
-          if (!dv) throw new Error('no reply for chunk ' + n + ' (firmware too old?)');
-          buf.set(new Uint8Array(dv.buffer, dv.byteOffset + 2, 16), n * 16);
-        }
-        console.log('OTP waveform (107 bytes), same layout as lut_fly_100:');
-        for (let i = 0; i < 5; i++) console.log('LUT' + i + ':   ' + hex(buf.slice(i * 10, i * 10 + 10)));
-        for (let i = 0; i < 10; i++) console.log('Group' + i + ': ' + hex(buf.slice(50 + i * 5, 55 + i * 5)));
-        console.log('VGH VSH1 VSH2 VSL VCOM FR1 FR2: ' + hex(buf.slice(100, 107)));
-        toast('Waveform written to the device log.', 'success');
-      } catch (error) {
-        toast('Waveform dump failed: ' + (error.message || error), 'error');
-      } finally {
-        try { await longValue.writeValueWithResponse(Uint8Array.of(0x99, 0xff)); } catch (e) { /* restores the status value; link may be gone */ }
-        setButtonEnabled(button, connected);
-      }
-    }
-    document.getElementById('lut-button').addEventListener('click', onLutDump);
-
-    // Byte 19 (newer firmware): how long the last panel update kept BUSY high, in 0.2 s units.
-    // A tri-colour full refresh should take roughly 15-25 s; a few seconds means it ended early.
-    function showRefreshTime(dv) {
-      const ds = dv.byteLength >= 20 ? dv.getUint8(19) : 0;
-      const el = document.getElementById('refresh_time');
-      el.textContent = ds === 0 ? '--' : (ds === 255 ? '>= 51 s' : (ds / 5).toFixed(1) + ' s');
-      if (ds) setValueStyle('refresh_time', false);
-      // Bytes 20-21: lowest battery mV sampled while that update ran; a big drop from the idle
-      // voltage means the supply sags under the panel's load
-      const mv = dv.byteLength >= 22 ? dv.getUint16(20, true) : 0;
-      const sv = document.getElementById('supply_min');
-      sv.textContent = mv === 0 ? '--' : (mv / 1000).toFixed(2) + ' V  (idle ' + document.getElementById('current_voltage').textContent + ')';
-      if (mv) setValueStyle('supply_min', false);
-    }
-
     // Display test / calibration screen; Clock + Calendar (or the next redraw) brings the clock back
     document.getElementById('test-button').addEventListener('click', async () => {
       try {
         await longValue.writeValueWithResponse(Uint8Array.of(0x98));
         toast('Test pattern sent. Click Clock + Calendar to go back.', 'info');
-        // The clock republishes its status when the update ends; watch for the refresh time
-        for (let i = 0; i < 30 && connected; i++) {
-          await new Promise(r => setTimeout(r, 3000));
-          try { showRefreshTime(await longValue.readValue()); } catch (e) { break; }
-        }
       } catch (error) {
         toast('Could not send the test pattern: ' + (error.message || error), 'error');
       }

@@ -46,7 +46,7 @@ Each slot image starts with a 64-byte Dialog SUOTA header:
 | `0x39000` | e-paper pinout (`09 01 ...`)                    |
 | `0x3A000` | e-paper resolution/mode info                    |
 | `0x3B000` | uploaded-image header (magic `IMG1`, size, CRC; written last) |
-| `0x3C000` | persisted display mode + panel overrides `{0xA5, mode, colour, size}` (own sector; colour/size `0xFF` = unset) |
+| `0x3C000` | persisted display mode + panel size override `{0xA5, mode, reserved, size}` (own sector; size `0xFF` = unset) |
 | `0x3D000` | uploaded-image pixels (logical 1bpp, ≤ 8 KB)    |
 
 ---

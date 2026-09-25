@@ -92,18 +92,12 @@ static struct custs1_val_set_req *val_set_alloc(uint16_t handle, uint16_t length
     return req;
 }
 
-// Raw battery-voltage sample (calibrates the ADC offset first)
-static int adc_sample(void)
+int adc1_update(void)
 {
     // Calibrate the ADC offset, using single-ended input mode
     adc_offset_calibrate(ADC_INPUT_MODE_SINGLE_ENDED);
-    return adc_get_vbat_sample(false);
-}
-
-int adc1_update(void)
-{
     // Sample the battery voltage
-    adcval = adc_sample();
+    adcval = adc_get_vbat_sample(false);
     // Convert the ADC value to an actual voltage value (units: mV)
     int volt = (adcval*225)>>7;
 
@@ -330,18 +324,9 @@ void clock_set(uint8_t *buf)
 static int layout_xres(void);
 static int layout_yres(void);
 
-// How long the last panel update kept BUSY high, for the web app (0.2 s units,
-// saturating at 255 = 51 s): diagnoses an update that ends before the waveform does
-static int epd_polls;
-static u8  epd_refresh_ds;
-// Lowest battery voltage sampled while the panel was updating (raw ADC, then mV
-// once the update ends): shows the supply sagging under the boost circuit's load
-static int epd_vmin_raw;
-static int epd_vmin_mv;
-
 void clock_push(void)
 {
-	struct custs1_val_set_req *req = val_set_alloc(SVC1_IDX_LONG_VALUE_VAL, 22);
+	struct custs1_val_set_req *req = val_set_alloc(SVC1_IDX_LONG_VALUE_VAL, 17);
 
 	req->value[0] = year&0xff;
 	req->value[1] = year>>8;
@@ -360,12 +345,7 @@ void clock_push(void)
 	req->value[13]= layout_yres()&0xff;
 	req->value[14]= layout_yres()>>8;
 	req->value[15]= display_mode;
-	req->value[16]= (scr_mode&EPD_BWR)? 1 : 0;	// panel colours: 0 = black/white, 1 = black/white/red
-	req->value[17]= panel_color_ovr;			// colour override: 0 = auto, 1 = black/white, 2 = black/white/red
-	req->value[18]= panel_size_ovr;			// size override: 0 = auto, 1..3 = layouts[] index + 1
-	req->value[19]= epd_refresh_ds;			// last panel update time, 0.2 s units (0 = none yet)
-	req->value[20]= epd_vmin_mv&0xff;		// lowest battery mV while the last update ran (16 bit, 0 = none yet)
-	req->value[21]= epd_vmin_mv>>8;
+	req->value[16]= panel_size_ovr;			// size override: 0 = auto, 1..3 = layouts[] index + 1
 	KE_MSG_SEND(req);
 }
 
@@ -500,24 +480,14 @@ void select_layout(int xres, int yres)
 static int image_pending = 0;
 static void image_paint(void);
 
-extern int app_connection_idx;
-
 static void epd_wait_timer(void)
 {
     if(epd_busy()){
         // Screen is still busy, check again in 400ms (app_easy_timer counts 10 ms slots)
-        epd_polls++;
-        {
-            int s = adc_sample();   // not stored in adcval: that drives the battery icon and cut-off
-            if(s < epd_vmin_raw) epd_vmin_raw = s;
-        }
         epd_wait_hnd = app_easy_timer(40, epd_wait_timer);
     }else{
         // Screen update complete
         epd_wait_hnd = EASY_TIMER_INVALID_TIMER;
-        // Each poll is 0.4 s = 2 units; the idle poll is the one after the last busy one
-        epd_refresh_ds = ((epd_polls+1)*2 > 255)? 255 : (epd_polls+1)*2;
-        epd_vmin_mv = (epd_vmin_raw==0x7fffffff)? 0 : (epd_vmin_raw*225)>>7;
         // Send the deep sleep command
         epd_cmd1(0x10, 0x01);
         // Power off
@@ -526,8 +496,6 @@ static void epd_wait_timer(void)
         epd_hw_close();
         // Put the system into extended sleep mode
         arch_set_sleep_mode(ARCH_EXT_SLEEP_ON);
-        // Let a connected web app see the refresh time
-        if(app_connection_idx!=-1) clock_push();
         if(image_pending){
             image_pending = 0;
             image_paint();
@@ -536,26 +504,22 @@ static void epd_wait_timer(void)
 }
 
 
-// Clear both framebuffers to a blank (white) screen before drawing a new one
+// Clear the framebuffer to a blank (white) screen before drawing a new one
 static void fb_clear(void)
 {
 	memset(fb_bw, 0xff, scr_h*line_bytes);
-	memset(fb_rr, 0x00, scr_h*line_bytes);
 }
 
-// Drive both planes solid black (ghost scrub / clean-up before a picture)
+// Drive the framebuffer solid black (ghost scrub / clean-up before a picture)
 static void fb_black(void)
 {
 	memset(fb_bw, 0x00, scr_h*line_bytes);
-	memset(fb_rr, 0x00, scr_h*line_bytes);
 }
 
 // Flush the framebuffers to the panel, then park the system until the update
 // completes (see epd_wait_timer above)
 static void epd_commit(void)
 {
-	epd_polls = 0;
-	epd_vmin_raw = 0x7fffffff;
 	epd_init();
 	epd_screen_update();
 	epd_update();
@@ -650,9 +614,11 @@ void LB_draw()
 }
 
 // Display test / calibration screen (BLE command 0x98), laid out from the panel
-// resolution (designed against 250x122, scales to the other layouts). Checks:
-//  - active area and orientation: border, and corner blocks (TL/BR black, TR/BL red)
-//  - colours: white / black / red swatches (red draws black on B/W panels)
+// resolution. Checks:
+//  - active area and orientation: border, and a block in each corner (solid at
+//    top-left and bottom-right, outlined at top-right and bottom-left)
+//  - the panel size the clock is using
+//  - contrast: white / grey (checkerboard) / black swatches
 //  - resolution: 1px and 2px line patterns
 void TEST_draw(void)
 {
@@ -667,30 +633,34 @@ void TEST_draw(void)
 
 	draw_rect(0, 0, xres-1, yres-1, BLACK);
 	draw_rect(1, 1, xres-2, yres-2, BLACK);
-	draw_box(2, 2, 9, 9, BLACK);
-	draw_box(xres-10, 2, xres-3, 9, RED);
-	draw_box(2, yres-10, 9, yres-3, RED);
-	draw_box(xres-10, yres-10, xres-3, yres-3, BLACK);
+	draw_box (2, 2, 9, 9, BLACK);
+	draw_rect(xres-10, 2, xres-3, 9, BLACK);
+	draw_rect(2, yres-10, 9, yres-3, BLACK);
+	draw_box (xres-10, yres-10, xres-3, yres-3, BLACK);
 
 	select_font(0); // sfont
-	draw_text_centered(cx, 2, "DISPLAY TEST", RED);
-	sprintf(tbuf, "%d x %d  %s", xres, yres, (scr_mode&EPD_BWR)? "BWR" : "BW");
+	draw_text_centered(cx, 2, "DISPLAY TEST", BLACK);
+	sprintf(tbuf, "%d x %d", xres, yres);
 	draw_text_centered(cx, 14, tbuf, BLACK);
 
-	// Colour swatches: white (outlined), black, red, with labels
+	// Swatches: white (outlined), grey (checkerboard), black, with labels
 	{
+		static const char *const name[3] = {"WHITE", "GREY", "BLACK"};
 		int bw = xres/6;
 		int x0 = (xres - 4*bw)/2;
 		int y1 = yres*36/100;
 		int y2 = yres*62/100;
-		static const char *const name[3] = {"WHITE", "BLACK", "RED"};
-		static const int color[3] = {WHITE, BLACK, RED};
 
 		for(int i=0; i<3; i++){
 			int x1 = x0 + i*bw*3/2;
 			int x2 = x1 + bw - 1;
 			draw_rect(x1, y1, x2, y2, BLACK);
-			if(color[i]!=WHITE) draw_box(x1+1, y1+1, x2-1, y2-1, color[i]);
+			if(i==2)
+				draw_box(x1+1, y1+1, x2-1, y2-1, BLACK);
+			else if(i==1)
+				for(int y=y1+1; y<y2; y++)
+					for(int x=x1+1+(y&1); x<x2; x+=2)
+						draw_pixel(x, y, BLACK);
 			draw_text_centered((x1+x2)/2, y2+2, (char*)name[i], BLACK);
 		}
 	}
@@ -810,8 +780,8 @@ static void draw_calendar_card(int x1, int y1, int x2, int y2)
 
 	draw_rect(x1, y1, x2, y2, BLACK);
 
-	// Weekday header: filled bar (red on BWR panels, black otherwise) with white (inverted) text
-	draw_box(x1+1, y1+1, x2-1, y1+header_h, RED);
+	// Weekday header: filled black bar with white (inverted) text
+	draw_box(x1+1, y1+1, x2-1, y1+header_h, BLACK);
 	select_font(0); // sfont
 	draw_text_centered_kerned_bold(cx, y1+CAL_WEEKDAY_Y_BIAS, wday_str[wday], CAL_WEEKDAY_KERNING, WHITE);
 
@@ -1022,10 +992,8 @@ void user_svc1_ctrl_wr_ind_handler(ke_msg_id_t const msgid,
  * Handles commands:
  * - 0x91: clock-set command
  * - 0x93-0x96: display mode + image upload (see image_cmd)
+ * - 0x97 size: panel size override (0 auto, 1..3 = layouts[] index + 1)
  * - 0x98: draw the display test / calibration screen
- * - 0x99 n: waveform dump chunk n (0..6), else restore the status value
- * - 0x97 colour size: panel overrides (colour 0 auto, 1 black/white, 2 black/white/red;
- *   size 0 auto, 1..3 = layouts[] index + 1)
  * - 0xA0 and above: OTA update related commands
  */
 void user_svc1_long_val_wr_ind_handler(ke_msg_id_t const msgid,
@@ -1059,22 +1027,8 @@ void user_svc1_long_val_wr_ind_handler(ke_msg_id_t const msgid,
 		clock_fixup_set(diff_sec, cal_minute);
 		cal_minute = 0;
 	}else if(param->value[0]==0x97){
-		// Panel colour + size override; the chip restarts if either changed
-		if(len<3 || ota_state) return;
-		panel_config_set(param->value[1], param->value[2]);
-	}else if(param->value[0]==0x99){
-		// Waveform dump: n = 0..6 publishes 16-byte chunk n of the OTP waveform read
-		// at boot as {0xd9, n, data[16]}; anything else restores the status value
-		int n = (len>=2)? param->value[1] : 0xff;
-		if(n<7){
-			struct custs1_val_set_req *req = val_set_alloc(SVC1_IDX_LONG_VALUE_VAL, 18);
-			req->value[0] = 0xd9;
-			req->value[1] = n;
-			memcpy(req->value+2, epd_lut_otp+n*16, 16);
-			KE_MSG_SEND(req);
-		}else{
-			clock_push();
-		}
+		// Panel size override; the chip restarts if it changed
+		if(len>=2 && !ota_state) panel_size_set(param->value[1]);
 	}else if(param->value[0]==0x98){
 		// Display test screen; the next clock redraw or a mode switch replaces it
 		if(!ota_state) TEST_draw();

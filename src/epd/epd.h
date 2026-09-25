@@ -36,12 +36,8 @@ int img_present(int xres, int yres);
 int img_render(int xres, int yres);
 int img_mode_get(void);
 void img_mode_set(int mode);
-void panel_config_set(int colour, int size);
-extern int panel_color_ovr;
+void panel_size_set(int size);
 extern int panel_size_ovr;
-extern u8 epd_lut_otp[112];	// OTP waveform + voltages read at boot (107 bytes)
-extern u8 epd_temp[2];	// raw temperature register read at boot (value/256 = degrees C)
-extern int lut_size;	// waveform register size probed at boot (identifies the controller)
 
 // Panel resolutions the card layout is proportioned against (landscape drawing
 // coordinates; the driver's native w x h is yres x xres). Also the sizes the
@@ -129,8 +125,6 @@ void draw_qr_code(
 void select_layout(int xres, int yres);
 
 
-#define EPD_BW    0x00
-#define EPD_BWR   0x20
 
 #define MIRROR_H  0x40
 #define MIRROR_V  0x80
@@ -141,7 +135,6 @@ void select_layout(int xres, int yres);
 
 #define BLACK     0
 #define WHITE     1
-#define RED       2
 
 
 #define UPDATE_FULL  0
@@ -161,7 +154,6 @@ extern int update_mode;
 
 extern int detect_w;
 extern int detect_h;
-extern int detect_mode;
 extern u32 detect_config0;
 extern u32 detect_config1;
 
@@ -173,6 +165,5 @@ extern int fb_w;
 extern int fb_h;
 
 extern u8 fb_bw[];
-extern u8 fb_rr[];
 
 
