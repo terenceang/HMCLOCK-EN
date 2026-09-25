@@ -22,7 +22,7 @@ This project utilizes discarded **Hema Electronic Shelf Label (ESL)** hardware f
 
 ## Supported screens
 
-The clock drives **black and white** panels only. The panel size normally comes from the configuration record in flash (`0x3A000`). If the record is missing or wrong (for example after swapping the panel), pick the size in the web app's Connection card (**EPD Size** dropdown, firmware 0xA50f0026 or later); the clock restarts to apply it. The **Test pattern** button next to it draws a border, corner blocks, size, grey/black swatches and line patterns to check the result.
+The clock drives **black and white** panels only. The panel size normally comes from the configuration record in flash (`0x3A000`). If the record is missing or wrong (for example after swapping the panel), pick the size in the web app's Display card (**Panel** dropdown, firmware 0xA50f0026 or later); the clock restarts to apply it. The **Test pattern** button next to it draws a border, corner blocks, size, grey/black swatches and line patterns to check the result.
 
 | Panel | Resolution (landscape) | Status |
 |-------|------------------------|--------|
@@ -43,7 +43,7 @@ Notes:
 ### 0xA50f0026
 
 * **Black and white only.** Removed the tri-colour (red plane) code and the panel-diagnostic experiments (waveform dump, temperature and refresh-time read-outs), which frees about 5 KB of RAM. The panel-size override stays.
-* **Web app:** QR deep link to one clock (`?n=DCLK-XXYYZZ`), optional auto time sync on connect, the EPD size shown with a size override and a Test pattern button, the clock's firmware version and the web build in the page, and a firmware update that detects a rejected image, verifies the running version and reconnects by itself.
+* **Web app:** QR deep link to one clock (`?n=DCLK-XXYYZZ`), optional auto time sync on connect, the panel size shown with a size override and a Test pattern button in the Display card, firmware version and update merged into the Connection card, the clock's firmware version and the web build in the page, and a firmware update that detects a rejected image, verifies the running version and reconnects by itself.
 * **Firmware update hardening:** an update aborts cleanly on disconnect, ignores stray commands, validates the product header and slot size, and only programs the image header once the CRC has passed.
 * The pairing (QR) screen scales to the panel (larger QR on 296 x 128).
 * Build from the command line: see `Programming.md`.

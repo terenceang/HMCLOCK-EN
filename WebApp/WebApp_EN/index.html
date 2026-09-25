@@ -116,15 +116,7 @@
             </div>
             <div>
               <p class="text-gray-500 dark:text-slate-400 text-sm">Device Name</p>
-              <p id="device_name" class="font-normal text-gray-500 dark:text-slate-400">Not Connected</p>
-              <p class="text-gray-500 dark:text-slate-400 text-sm mt-1">EPD Size</p>
-              <div class="flex flex-wrap items-center gap-2">
-                <p id="panel_size" class="font-normal text-gray-500 dark:text-slate-400">--</p>
-                <select id="panel-size" aria-label="Panel size override" title="Connect to the clock first" class="text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 opacity-50 cursor-not-allowed" disabled></select>
-                <button id="test-button" title="Connect to the clock first" class="bg-slate-600 text-white text-sm px-3 py-1 rounded-lg btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
-                  <i class="fa fa-th-large"></i> Test pattern
-                </button>
-              </div>
+              <p id="device_name" class="font-normal text-gray-500 dark:text-slate-400">--</p>
             </div>
           </div>
           <div class="flex items-center gap-3">
@@ -140,7 +132,23 @@
           </div>
         </div>
 
-        <p id="last-event" class="text-xs text-gray-600 dark:text-slate-400 truncate" aria-hidden="true"></p>
+        <!-- Firmware -->
+        <div class="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-300 dark:border-slate-700">
+          <p class="text-sm text-gray-600 dark:text-slate-400"><i class="fa fa-microchip text-primary"></i> Firmware <span id="firmware_version" class="font-normal text-gray-500 dark:text-slate-400">--</span></p>
+          <button id="upfirm-button" title="Connect to the clock first" class="bg-accent text-white text-sm px-4 py-1.5 rounded-lg flex items-center justify-center gap-2 btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
+            <i class="fa fa-refresh"></i> Update firmware
+          </button>
+        </div>
+        <div id="progress-container" class="hidden">
+          <p class="text-sm font-medium text-gray-600 dark:text-slate-300 mb-1">Firmware Update Progress</p>
+          <div class="h-2 bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden">
+            <div id="update_progress_bar" class="h-full bg-gradient-to-r from-primary to-accent w-0 transition-all duration-300"></div>
+          </div>
+          <p id="update_progress_text" class="text-xs text-gray-500 dark:text-slate-400 mt-1">0%</p>
+        </div>
+
+        <p class="connect-note text-xs text-gray-600 dark:text-slate-400">Connect to the clock to enable the controls below.</p>
+        <p id="last-event"        <p id="last-event" class="text-xs text-gray-600 dark:text-slate-400 truncate" aria-hidden="true"></p>
 
         <!-- Bluetooth availability / connection error banner -->
         <div id="bt-status" class="hidden" role="alert"></div>
@@ -172,17 +180,16 @@
             </div>
           </div>
         </div>
-        <p class="text-sm text-gray-600 dark:text-slate-400">Sync Time sets the clock from this computer. Time Calibration measures how far the clock has drifted and trims it. It needs at least two days since the last sync and can take up to a minute.</p>
-        <div class="flex flex-wrap gap-3">
+        <p class="text-sm text-gray-600 dark:text-slate-400">Sync Time sets the clock from this computer. Time Calibration trims its drift; it needs at least two days since the last sync and can take up to a minute.</p>
+        <div class="flex flex-wrap items-center gap-3">
           <button id="setime-button" title="Connect to the clock first" class="bg-warning text-white px-5 py-2.5 rounded-lg flex items-center justify-center gap-2 btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
             <i class="fa fa-clock-o"></i> Sync Time
           </button>
           <button id="calibration-button" title="Connect to the clock first" class="bg-secondary text-white px-5 py-2.5 rounded-lg flex items-center justify-center gap-2 btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
             <i class="fa fa-wrench"></i> Time Calibration
           </button>
+          <label class="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400 cursor-pointer"><input id="opt-autosync" type="checkbox" class="w-4 h-4"> Sync time automatically when connecting</label>
         </div>
-        <label class="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400 cursor-pointer"><input id="opt-autosync" type="checkbox" class="w-4 h-4"> Sync time automatically when connecting</label>
-        <p class="connect-note text-xs text-gray-600 dark:text-slate-400">Connect to the clock to enable these buttons.</p>
       </section>
 
       <!-- Display: one preview of what the clock shows (clock + calendar, or the picture) -->
@@ -199,6 +206,15 @@
               <i class="fa fa-picture-o"></i> Image
             </button>
           </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
+          <span>Panel</span>
+          <span id="panel_size" class="font-normal text-gray-500 dark:text-slate-400">--</span>
+          <select id="panel-size" aria-label="Panel size override" title="Connect to the clock first" class="text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 opacity-50 cursor-not-allowed" disabled></select>
+          <button id="test-button" title="Connect to the clock first" class="bg-slate-600 text-white text-sm px-3 py-1 rounded-lg btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
+            <i class="fa fa-th-large"></i> Test pattern
+          </button>
         </div>
 
         <p id="mode-hint" class="text-xs text-gray-600 dark:text-slate-400"></p>
@@ -225,14 +241,13 @@
                   </g>
                   <line id="hour-hand" x1="100" y1="100" x2="100" y2="58" class="stroke-slate-800 dark:stroke-slate-200" stroke-width="7" stroke-linecap="round"/>
                   <line id="minute-hand" x1="100" y1="100" x2="100" y2="34" class="stroke-slate-800 dark:stroke-slate-200" stroke-width="5" stroke-linecap="round"/>
-                  <line id="second-hand" x1="100" y1="100" x2="100" y2="22" class="stroke-red-500 dark:stroke-red-400" stroke-width="2" stroke-linecap="round"/>
                   <circle cx="100" cy="100" r="6" class="fill-slate-800 dark:fill-slate-200"/>
                 </svg>
               </div>
 
               <!-- iOS-style calendar icon card: shows year / date / weekday -->
               <div class="card-effect overflow-hidden flex flex-col" style="width:140px;">
-                <div class="bg-danger text-white text-center text-sm font-bold py-1.5" id="cal-weekday">Sun</div>
+                <div class="bg-gray-900 text-white text-center text-sm font-bold py-1.5" id="cal-weekday">Sun</div>
                 <div class="flex-1 flex flex-col items-center justify-center py-4">
                   <div class="text-5xl font-bold text-dark dark:text-slate-100 leading-none" id="cal-date">--</div>
                   <div class="text-xs text-gray-500 dark:text-slate-400 mt-2" id="cal-year">----</div>
@@ -285,26 +300,6 @@
         </div>
       </section>
 
-      <!-- Firmware -->
-      <section class="card-effect p-5 space-y-4" aria-labelledby="h-firmware">
-        <h2 id="h-firmware" class="font-semibold text-gray-700 dark:text-slate-200 flex items-center gap-2">
-          <i class="fa fa-microchip text-primary"></i> Firmware
-        </h2>
-        <p class="text-sm text-gray-600 dark:text-slate-400">Current version: <span id="firmware_version" class="font-normal text-gray-500 dark:text-slate-400">--</span></p>
-        <p class="text-sm text-gray-600 dark:text-slate-400">Flash a firmware .bin file to the clock. Keep it connected and powered until the update finishes.</p>
-        <button id="upfirm-button" title="Connect to the clock first" class="bg-accent text-white px-5 py-2.5 rounded-lg flex items-center justify-center gap-2 btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
-          <i class="fa fa-refresh"></i> Firmware Update
-        </button>
-        <p class="connect-note text-xs text-gray-600 dark:text-slate-400">Connect to the clock to enable this button.</p>
-        <div id="progress-container" class="hidden">
-          <p class="text-sm font-medium text-gray-600 dark:text-slate-300 mb-1">Firmware Update Progress</p>
-          <div class="h-2 bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden">
-            <div id="update_progress_bar" class="h-full bg-gradient-to-r from-primary to-accent w-0 transition-all duration-300"></div>
-          </div>
-          <p id="update_progress_text" class="text-xs text-gray-500 dark:text-slate-400 mt-1">0%</p>
-        </div>
-      </section>
-
       <!-- Log terminal -->
       <section class="card-effect p-5 space-y-3" aria-labelledby="h-log">
         <div class="flex flex-wrap justify-between items-center gap-2">
@@ -318,7 +313,7 @@
             <button id="clear-log-btn" class="text-sm px-3 py-2.5 rounded-lg text-gray-600 dark:text-slate-400 hover:text-danger transition-colors"><i class="fa fa-trash-o"></i> Clear</button>
           </div>
         </div>
-        <div id="log-window" role="log" aria-live="polite" class="bg-gray-900 text-gray-100 text-xs md:text-sm rounded-lg h-48 md:h-64 overflow-y-auto p-3 font-mono">
+        <div id="log-window" role="log" aria-live="polite" class="bg-gray-900 text-gray-100 text-xs md:text-sm rounded-lg overflow-y-auto p-3 font-mono" style="height:9rem">
           <div class="text-gray-400 log-entry">Terminal started, waiting for device connection...</div>
         </div>
       </section>
@@ -326,11 +321,9 @@
 
     <!-- Footer -->
     <footer class="mt-6 text-center text-xs text-gray-600 dark:text-slate-300">
-      <p>HM CLOCK Bluetooth Control Tool &copy; <a href="https://github.com/tpunix/HMCLOCK" target="_blank" rel="noopener" class="underline text-primary">https://github.com/tpunix/HMCLOCK</a></p>
-      <p class="mt-1">Fork by Terence Ang - motionfxdesign</p>
+      <p>HM CLOCK Bluetooth Control Tool &copy; <a href="https://github.com/tpunix/HMCLOCK" target="_blank" rel="noopener" class="underline text-primary">tpunix/HMCLOCK</a> &middot; fork by Terence Ang</p>
       <!-- The placeholder below is replaced with the commit + time by .github/workflows/sync-docs.yml when publishing -->
-      <p class="mt-1">Web app build: <span id="web-build">__WEB_BUILD__</span></p>
-      <p class="mt-1">Shortcuts: <kbd>C</kbd> connect / disconnect &middot; <kbd>S</kbd> sync time &middot; <kbd>D</kbd> switch clock / image</p>
+      <p class="mt-1">Web app build: <span id="web-build">__WEB_BUILD__</span> &middot; Shortcuts: <kbd>C</kbd> connect / disconnect &middot; <kbd>S</kbd> sync time &middot; <kbd>D</kbd> switch clock / image</p>
     </footer>
   </div>
 
@@ -386,8 +379,7 @@
     const wdayShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const clockHands = {
       hour:   document.getElementById('hour-hand'),
-      minute: document.getElementById('minute-hand'),
-      second: document.getElementById('second-hand')
+      minute: document.getElementById('minute-hand')
     };
     const calWeekday = document.getElementById('cal-weekday');
     const calDate = document.getElementById('cal-date');
@@ -410,11 +402,9 @@
       const minute = date.getMinutes();
       const second = date.getSeconds();
 
-      const secDeg = second * 6;
       const minDeg = minute * 6 + second * 0.1;
       const hourDeg = (hour % 12) * 30 + minute * 0.5;
 
-      clockHands.second.setAttribute('transform', `rotate(${secDeg} 100 100)`);
       clockHands.minute.setAttribute('transform', `rotate(${minDeg} 100 100)`);
       clockHands.hour.setAttribute('transform', `rotate(${hourDeg} 100 100)`);
 
@@ -1130,7 +1120,7 @@
       device = null;
       connected = false;
 
-      document.getElementById('device_name').textContent = "Not Connected";
+      document.getElementById('device_name').textContent = "--";
       document.getElementById('current_voltage').textContent = "--.- V";
       document.getElementById('current_time').textContent = "--:--:--";
       document.getElementById('time_drift').textContent = "";
