@@ -119,6 +119,8 @@
               <p id="device_name" class="font-normal text-gray-500 dark:text-slate-400">Not Connected</p>
               <p class="text-gray-500 dark:text-slate-400 text-sm mt-1">EPD Size / Colours</p>
               <p id="panel_size" class="font-normal text-gray-500 dark:text-slate-400">--</p>
+              <p class="text-gray-500 dark:text-slate-400 text-sm mt-1">Panel temperature (at boot)</p>
+              <p id="panel_temp" class="font-normal text-gray-500 dark:text-slate-400">--</p>
               <label for="panel-size" class="block text-gray-500 dark:text-slate-400 text-sm mt-1">Panel size</label>
               <select id="panel-size" title="Connect to the clock first" class="text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 opacity-50 cursor-not-allowed" disabled>
                 <option value="0">Auto (panel record)</option>
@@ -774,6 +776,12 @@
           panelH = cur_time.getUint16(13, true);
           showMode(cur_time.getUint8(15));
           // Byte 16 (newer firmware): 1 = black/white/red panel
+          // Bytes 20-21 (newer firmware): the controller's temperature register, 16 bit, value/256 = degrees C
+          if (cur_time.byteLength >= 22) {
+            const raw = cur_time.getInt16(20, false);
+            document.getElementById('panel_temp').textContent = (raw / 256).toFixed(1) + ' °C  (raw 0x' + (raw & 0xffff).toString(16).padStart(4, '0') + ')';
+            setValueStyle('panel_temp', false);
+          }
           panelColor.value = cur_time.byteLength >= 18 ? cur_time.getUint8(17) : 0;
           panelSize.value = cur_time.byteLength >= 19 ? cur_time.getUint8(18) : 0;
           panelColorSupported = cur_time.byteLength >= 18;
@@ -1148,7 +1156,8 @@
       document.getElementById('time_drift').textContent = "";
       document.getElementById('firmware_version').textContent = "--";
       document.getElementById('panel_size').textContent = "--";
-      ['device_name', 'panel_size', 'firmware_version', 'current_voltage', 'current_time'].forEach(id => setValueStyle(id, true));
+      document.getElementById('panel_temp').textContent = "--";
+      ['device_name', 'panel_size', 'panel_temp', 'firmware_version', 'current_voltage', 'current_time'].forEach(id => setValueStyle(id, true));
       document.getElementById('battery-bar').classList.add('hidden');
       document.getElementById('battery-note').textContent = '';
       deviceMode = null;
