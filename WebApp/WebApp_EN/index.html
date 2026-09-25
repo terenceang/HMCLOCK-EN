@@ -119,8 +119,8 @@
               <p id="device_name" class="font-normal text-gray-500 dark:text-slate-400">Not Connected</p>
               <p class="text-gray-500 dark:text-slate-400 text-sm mt-1">EPD Size / Colours</p>
               <p id="panel_size" class="font-normal text-gray-500 dark:text-slate-400">--</p>
-              <p class="text-gray-500 dark:text-slate-400 text-sm mt-1">Panel temperature (at boot)</p>
-              <p id="panel_temp" class="font-normal text-gray-500 dark:text-slate-400">--</p>
+              <p class="text-gray-500 dark:text-slate-400 text-sm mt-1">Battery during last refresh (min)</p>
+              <p id="supply_min" class="font-normal text-gray-500 dark:text-slate-400">--</p>
               <button id="lut-button" title="Connect to the clock first" class="mt-2 bg-slate-600 text-white text-sm px-3 py-1.5 rounded-lg btn-hover font-medium opacity-50 cursor-not-allowed" disabled>
                 <i class="fa fa-list-alt"></i> Dump waveform to log
               </button>
@@ -785,12 +785,6 @@
           showMode(cur_time.getUint8(15));
           // Byte 16 (newer firmware): 1 = black/white/red panel
           showRefreshTime(cur_time);
-          // Bytes 20-21 (newer firmware): the controller's temperature register, 16 bit, value/256 = degrees C
-          if (cur_time.byteLength >= 22) {
-            const raw = cur_time.getInt16(20, false);
-            document.getElementById('panel_temp').textContent = (raw / 256).toFixed(1) + ' °C  (raw 0x' + (raw & 0xffff).toString(16).padStart(4, '0') + ')';
-            setValueStyle('panel_temp', false);
-          }
           panelColor.value = cur_time.byteLength >= 18 ? cur_time.getUint8(17) : 0;
           panelSize.value = cur_time.byteLength >= 19 ? cur_time.getUint8(18) : 0;
           panelColorSupported = cur_time.byteLength >= 18;
@@ -1168,9 +1162,9 @@
       document.getElementById('time_drift').textContent = "";
       document.getElementById('firmware_version').textContent = "--";
       document.getElementById('panel_size').textContent = "--";
-      document.getElementById('panel_temp').textContent = "--";
+      document.getElementById('supply_min').textContent = "--";
       document.getElementById('refresh_time').textContent = "--";
-      ['device_name', 'panel_size', 'panel_temp', 'firmware_version', 'current_voltage', 'current_time'].forEach(id => setValueStyle(id, true));
+      ['device_name', 'panel_size', 'supply_min', 'firmware_version', 'current_voltage', 'current_time'].forEach(id => setValueStyle(id, true));
       document.getElementById('battery-bar').classList.add('hidden');
       document.getElementById('battery-note').textContent = '';
       deviceMode = null;
@@ -1612,6 +1606,12 @@
       const el = document.getElementById('refresh_time');
       el.textContent = ds === 0 ? '--' : (ds === 255 ? '>= 51 s' : (ds / 5).toFixed(1) + ' s');
       if (ds) setValueStyle('refresh_time', false);
+      // Bytes 20-21: lowest battery mV sampled while that update ran; a big drop from the idle
+      // voltage means the supply sags under the panel's load
+      const mv = dv.byteLength >= 22 ? dv.getUint16(20, true) : 0;
+      const sv = document.getElementById('supply_min');
+      sv.textContent = mv === 0 ? '--' : (mv / 1000).toFixed(2) + ' V  (idle ' + document.getElementById('current_voltage').textContent + ')';
+      if (mv) setValueStyle('supply_min', false);
     }
 
     // Display test / calibration screen; Clock + Calendar (or the next redraw) brings the clock back

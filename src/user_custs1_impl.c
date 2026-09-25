@@ -92,12 +92,18 @@ static struct custs1_val_set_req *val_set_alloc(uint16_t handle, uint16_t length
     return req;
 }
 
-int adc1_update(void)
+// Raw battery-voltage sample (calibrates the ADC offset first)
+static int adc_sample(void)
 {
     // Calibrate the ADC offset, using single-ended input mode
     adc_offset_calibrate(ADC_INPUT_MODE_SINGLE_ENDED);
+    return adc_get_vbat_sample(false);
+}
+
+int adc1_update(void)
+{
     // Sample the battery voltage
-    adcval = adc_get_vbat_sample(false);
+    adcval = adc_sample();
     // Convert the ADC value to an actual voltage value (units: mV)
     int volt = (adcval*225)>>7;
 
@@ -328,6 +334,10 @@ static int layout_yres(void);
 // saturating at 255 = 51 s): diagnoses an update that ends before the waveform does
 static int epd_polls;
 static u8  epd_refresh_ds;
+// Lowest battery voltage sampled while the panel was updating (raw ADC, then mV
+// once the update ends): shows the supply sagging under the boost circuit's load
+static int epd_vmin_raw;
+static int epd_vmin_mv;
 
 void clock_push(void)
 {
@@ -354,8 +364,8 @@ void clock_push(void)
 	req->value[17]= panel_color_ovr;			// colour override: 0 = auto, 1 = black/white, 2 = black/white/red
 	req->value[18]= panel_size_ovr;			// size override: 0 = auto, 1..3 = layouts[] index + 1
 	req->value[19]= epd_refresh_ds;			// last panel update time, 0.2 s units (0 = none yet)
-	req->value[20]= epd_temp[0];			// controller temperature register (16 bit, value/256 = degrees C)
-	req->value[21]= epd_temp[1];
+	req->value[20]= epd_vmin_mv&0xff;		// lowest battery mV while the last update ran (16 bit, 0 = none yet)
+	req->value[21]= epd_vmin_mv>>8;
 	KE_MSG_SEND(req);
 }
 
@@ -497,12 +507,17 @@ static void epd_wait_timer(void)
     if(epd_busy()){
         // Screen is still busy, check again in 400ms (app_easy_timer counts 10 ms slots)
         epd_polls++;
+        {
+            int s = adc_sample();   // not stored in adcval: that drives the battery icon and cut-off
+            if(s < epd_vmin_raw) epd_vmin_raw = s;
+        }
         epd_wait_hnd = app_easy_timer(40, epd_wait_timer);
     }else{
         // Screen update complete
         epd_wait_hnd = EASY_TIMER_INVALID_TIMER;
         // Each poll is 0.4 s = 2 units; the idle poll is the one after the last busy one
         epd_refresh_ds = ((epd_polls+1)*2 > 255)? 255 : (epd_polls+1)*2;
+        epd_vmin_mv = (epd_vmin_raw==0x7fffffff)? 0 : (epd_vmin_raw*225)>>7;
         // Send the deep sleep command
         epd_cmd1(0x10, 0x01);
         // Power off
@@ -540,6 +555,7 @@ static void fb_black(void)
 static void epd_commit(void)
 {
 	epd_polls = 0;
+	epd_vmin_raw = 0x7fffffff;
 	epd_init();
 	epd_screen_update();
 	epd_update();
