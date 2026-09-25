@@ -994,6 +994,7 @@ void user_svc1_ctrl_wr_ind_handler(ke_msg_id_t const msgid,
  * - 0x91: clock-set command
  * - 0x93-0x96: display mode + image upload (see image_cmd)
  * - 0x98: draw the display test / calibration screen
+ * - 0x99 n: waveform dump chunk n (0..6), else restore the status value
  * - 0x97 colour size: panel overrides (colour 0 auto, 1 black/white, 2 black/white/red;
  *   size 0 auto, 1..3 = layouts[] index + 1)
  * - 0xA0 and above: OTA update related commands
@@ -1032,6 +1033,19 @@ void user_svc1_long_val_wr_ind_handler(ke_msg_id_t const msgid,
 		// Panel colour + size override; the chip restarts if either changed
 		if(len<3 || ota_state) return;
 		panel_config_set(param->value[1], param->value[2]);
+	}else if(param->value[0]==0x99){
+		// Waveform dump: n = 0..6 publishes 16-byte chunk n of the OTP waveform read
+		// at boot as {0xd9, n, data[16]}; anything else restores the status value
+		int n = (len>=2)? param->value[1] : 0xff;
+		if(n<7){
+			struct custs1_val_set_req *req = val_set_alloc(SVC1_IDX_LONG_VALUE_VAL, 18);
+			req->value[0] = 0xd9;
+			req->value[1] = n;
+			memcpy(req->value+2, epd_lut_otp+n*16, 16);
+			KE_MSG_SEND(req);
+		}else{
+			clock_push();
+		}
 	}else if(param->value[0]==0x98){
 		// Display test screen; the next clock redraw or a mode switch replaces it
 		if(!ota_state) TEST_draw();

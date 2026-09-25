@@ -39,6 +39,7 @@ void img_mode_set(int mode);
 void panel_config_set(int colour, int size);
 extern int panel_color_ovr;
 extern int panel_size_ovr;
+extern u8 epd_lut_otp[112];	// OTP waveform + voltages read at boot (107 bytes)
 extern u8 epd_temp[2];	// raw temperature register read at boot (value/256 = degrees C)
 extern int lut_size;	// waveform register size probed at boot (identifies the controller)
 

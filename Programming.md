@@ -46,8 +46,55 @@ Each slot image starts with a 64-byte Dialog SUOTA header:
 | `0x39000` | e-paper pinout (`09 01 ...`)                    |
 | `0x3A000` | e-paper resolution/mode info                    |
 | `0x3B000` | uploaded-image header (magic `IMG1`, size, CRC; written last) |
-| `0x3C000` | persisted display mode `{0xA5, mode}` (own sector) |
+| `0x3C000` | persisted display mode + panel overrides `{0xA5, mode, colour, size}` (own sector; colour/size `0xFF` = unset) |
 | `0x3D000` | uploaded-image pixels (logical 1bpp, ≤ 8 KB)    |
+
+---
+
+## Building the firmware (command line)
+
+A full rebuild from a terminal, no IDE needed. This is the method that produced
+the working `.bin` files (Keil MDK 5, Arm Compiler 6.24, target `DA14585`).
+
+```
+cd Keil_5
+"%LOCALAPPDATA%/Keil_v5/UV4/UV4.exe" -r ble_app_peripheral.uvprojx -j0 -t DA14585 -o build.log
+```
+
+(From Git Bash use `"/c/Users/<you>/AppData/Local/Keil_v5/UV4/UV4.exe"`; adjust
+the path if Keil is installed elsewhere, for example `C:/Keil_v5/UV4/UV4.exe`.)
+
+* `-r` is a **full rebuild**. Use it every time, to be safe: `EPD_VERSION` lives
+  in a header (`src/config/user_config.h`), and an incremental build (`-b`)
+  might not recompile every file that uses it.
+* `-j0` hides the GUI and `-o` writes the compiler output to a log file. A run
+  takes about 15 seconds.
+* The build is good when the log ends with `0 Error(s), 0 Warning(s)`.
+* An after-build step runs `fromelf --bincombined`, which produces the file to
+  flash. The output is in `Keil_5/out_DA14585/Objects/` (git-ignored):
+
+  | File | Use |
+  |------|-----|
+  | `ble_app_peripheral_585.bin` | flash with the web app (Method 2) |
+  | `ble_app_peripheral_585.axf` | debugger / OpenOCD RAM load (Method 1) |
+  | `ble_app_peripheral_585.hex` | hex image |
+
+**Check the version before flashing.** The web app reads it from the `.bin`
+and shows it in the flash confirmation (`v<n>`), which is the low 16 bits of
+`EPD_VERSION`. To check it from a script, search the file for the 8-byte marker
+`79 13 A5 F9 86 EC 5A 06`; the little-endian 16-bit version is at marker
+offset +8:
+
+```python
+b = open("ble_app_peripheral_585.bin", "rb").read()
+i = b.find(bytes([0x79, 0x13, 0xA5, 0xF9, 0x86, 0xEC, 0x5A, 0x06]))
+print(b[i + 9] * 256 + b[i + 8])
+```
+
+> **Always bump `EPD_VERSION` for any firmware change** and rebuild fully. A
+> stale `.bin` that reports an old version is the usual reason a flashed change
+> "does nothing": `selflash()` identifies a build by size + version only, and the
+> web app will happily flash the same version again.
 
 ---
 

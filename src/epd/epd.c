@@ -425,6 +425,11 @@ void epd_screen_clean(int mode)
 // back from the controller at boot, 0/0 if it was never read.
 u8 epd_temp[2];
 
+// Waveform (5x10 LUT rows + 10x5 groups) and drive voltages (VGH, VSH1, VSH2,
+// VSL, VCOM, FR1, FR2) the controller loaded from its OTP at that temperature:
+// 107 bytes, zero padded to 7 chunks of 16 for the web app's waveform dump.
+u8 epd_lut_otp[112];
+
 // Have the controller measure the temperature (internal sensor) and read the
 // result back. This is the value it picks the waveform from.
 static void epd_read_temp(void)
@@ -439,6 +444,9 @@ static void epd_read_temp(void)
 	epd_cmd_read(0x1b, t, 2);
 	epd_temp[0] = t[0];
 	epd_temp[1] = t[1];
+
+	// The same command also loaded the OTP waveform for that temperature: read it back
+	epd_cmd_read(0x33, epd_lut_otp, 107);
 }
 
 int epd_detect(void)
