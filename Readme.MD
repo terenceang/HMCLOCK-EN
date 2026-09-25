@@ -24,15 +24,17 @@ This project utilizes discarded **Hema Electronic Shelf Label (ESL)** hardware f
 
 The clock drives every panel in **black and white** only (the red plane of tri-colour panels is not driven); the table lists what has been tested. The panel size normally comes from the configuration record in flash (`0x3A000`). If the record is missing or wrong (for example after swapping the panel), pick the size in the web app's Display card (**Panel** dropdown, firmware 0xA50f0026 or later); the clock restarts to apply it. The **Test pattern** button next to it draws a border, corner blocks, size, grey/black swatches and line patterns to check the result.
 
-| Size | Colors | Interface | Model | Main MCU | Resolution (landscape) | Disassembly | LED | Pinout | Status |
-|------|--------|-----------|-------|----------|------------------------|-------------|-----|--------|--------|
-| 2.13" | Black/White | Soldered | HINK-E0213A41/A55 | IL3897 / SSD1675B | 212×104 | Hard | Yes | `pinout_1/0.xlsx`, `Hardware/HINK-E0213A41-FPC.md` | Tested working (HINK-E0213A41-FPC). Reference panel, populated on the HMCLOCK board |
-| 2.13" | Black/White | Soldered | HINK-E0213A53-FPC-A0 | ? | ? | ? | ? | ? | Tested working |
-| 2.13" | Black/White | Socket | HINK-E0213A07-A1 | ? | ? | ? | ? | ? | Tested working |
-| 2.13" | Black/White | Socket | OPM021B1 | IL3895 / SSD1673A | 250×122 | Hard | Yes | `pinout_0.xlsx` | Not tested |
-| 2.13" | Black/White/Red | ? | HINK-E0213A22-A0 | ? | 250×122 | ? | ? | ? | Select `250 x 122`; black/white only. On the HMCLOCK board its contrast was weak, most likely because the board's boost circuit was sized for the A41 |
-| 2.13" | Black/White/Red | Soldered | HINK-E0213A67 | IL3897 | 250×122 | Hard | 3-Color | `pinout_0.xlsx` | Not tested |
-| 2.9" | Black/White/Red | Socket | HINK-E029A10 | IL3897 | 296×128 | Easy | Yes | `pinout_0.xlsx` | Not tested (layout only, not verified on hardware) |
+| Model | Size | Colors | Resolution | Interface | Status |
+|-------|------|--------|------------|-----------|--------|
+| HINK-E0213A41/A55 | 2.13" | B/W | 212×104 | Soldered | Tested working (A41-FPC). Reference panel on the HMCLOCK board |
+| HINK-E0213A53-FPC-A0 | 2.13" | B/W | ? | Soldered | Tested working |
+| HINK-E0213A07-A1 | 2.13" | B/W | ? | Socket | Tested working |
+| OPM021B1 | 2.13" | B/W | 250×122 | Socket | Not tested |
+| HINK-E0213A22-A0 | 2.13" | B/W/Red | 250×122 | ? | Works in B/W only; select `250 x 122`. Contrast was weak, probably because the board's boost circuit is sized for the A41 |
+| HINK-E0213A67 | 2.13" | B/W/Red | 250×122 | Soldered | Not tested |
+| HINK-E029A10 | 2.9" | B/W/Red | 296×128 | Socket | Not tested (layout only) |
+
+Controllers: A41/A55 IL3897 / SSD1675B, OPM021B1 IL3895 / SSD1673A, A67 and E029A10 IL3897. Pinouts: `pinout_1/0.xlsx`, `pinout_0.xlsx`, `Hardware/HINK-E0213A41-FPC.md`. The E029A10 is the easiest to disassemble; the 2.13" panels are hard.
 
 Notes:
 
