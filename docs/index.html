@@ -117,6 +117,8 @@
             <div>
               <p class="text-gray-500 dark:text-slate-400 text-sm">Device Name</p>
               <p id="device_name" class="font-normal text-gray-500 dark:text-slate-400">Not Connected</p>
+              <p class="text-gray-500 dark:text-slate-400 text-sm mt-1">EPD Size</p>
+              <p id="panel_size" class="font-normal text-gray-500 dark:text-slate-400">--</p>
             </div>
           </div>
           <div class="flex items-center gap-3">
@@ -752,6 +754,8 @@
           panelW = cur_time.getUint16(11, true);
           panelH = cur_time.getUint16(13, true);
           showMode(cur_time.getUint8(15));
+          document.getElementById('panel_size').textContent = panelW + ' x ' + panelH + ' px';
+          setValueStyle('panel_size', false);
         } else {
           panelW = panelH = 0;
           setImageStatus('This firmware does not support image mode - update the firmware first.', 'error');
@@ -1082,7 +1086,8 @@
       document.getElementById('current_time').textContent = "--:--:--";
       document.getElementById('time_drift').textContent = "";
       document.getElementById('firmware_version').textContent = "--";
-      ['device_name', 'firmware_version', 'current_voltage', 'current_time'].forEach(id => setValueStyle(id, true));
+      document.getElementById('panel_size').textContent = "--";
+      ['device_name', 'panel_size', 'firmware_version', 'current_voltage', 'current_time'].forEach(id => setValueStyle(id, true));
       document.getElementById('battery-bar').classList.add('hidden');
       document.getElementById('battery-note').textContent = '';
       deviceMode = null;
