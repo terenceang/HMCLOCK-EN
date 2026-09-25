@@ -119,6 +119,13 @@
               <p id="device_name" class="font-normal text-gray-500 dark:text-slate-400">Not Connected</p>
               <p class="text-gray-500 dark:text-slate-400 text-sm mt-1">EPD Size / Colours</p>
               <p id="panel_size" class="font-normal text-gray-500 dark:text-slate-400">--</p>
+              <label for="panel-size" class="block text-gray-500 dark:text-slate-400 text-sm mt-1">Panel size</label>
+              <select id="panel-size" title="Connect to the clock first" class="text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 opacity-50 cursor-not-allowed" disabled>
+                <option value="0">Auto (panel record)</option>
+                <option value="1">212 x 104</option>
+                <option value="2">250 x 122</option>
+                <option value="3">296 x 128</option>
+              </select>
               <label for="panel-color" class="block text-gray-500 dark:text-slate-400 text-sm mt-1">Panel colour type</label>
               <select id="panel-color" title="Connect to the clock first" class="text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 opacity-50 cursor-not-allowed" disabled>
                 <option value="0">Auto (panel record)</option>
@@ -542,7 +549,8 @@
       document.getElementById('setime-button'),
       document.getElementById('upfirm-button'),
       document.getElementById('calibration-button'),
-      document.getElementById('panel-color')
+      document.getElementById('panel-color'),
+      document.getElementById('panel-size')
     ];
 
     function setDeviceButtonsEnabled(enabled) {
@@ -763,7 +771,10 @@
           showMode(cur_time.getUint8(15));
           // Byte 16 (newer firmware): 1 = black/white/red panel
           panelColor.value = cur_time.byteLength >= 18 ? cur_time.getUint8(17) : 0;
+          panelSize.value = cur_time.byteLength >= 19 ? cur_time.getUint8(18) : 0;
           panelColorSupported = cur_time.byteLength >= 18;
+          panelSizeSupported = cur_time.byteLength >= 19;
+          panelCurrent = { color: panelColor.value, size: panelSize.value };
           const colors = cur_time.byteLength >= 17 ? (cur_time.getUint8(16) ? ', black/white/red' : ', black/white') : '';
           document.getElementById('panel_size').textContent = panelW + ' x ' + panelH + ' px' + colors;
           setValueStyle('panel_size', false);
@@ -786,7 +797,9 @@
         checkSavedImage();
         connected = true;
         setDeviceButtonsEnabled(true);
-        if (!panelColorSupported) setButtonEnabled(panelColor, false);   // older firmware can't switch it
+        // older firmware can't switch these
+        if (!panelColorSupported) setButtonEnabled(panelColor, false);
+        if (!panelSizeSupported) setButtonEnabled(panelSize, false);
         setPill('on');
         renderPreview();
 
@@ -886,28 +899,31 @@
       }
     }
 
-    // Panel colour override (0 auto, 1 black/white, 2 black/white/red); the clock restarts to apply it
+    // Panel colour (0 auto, 1 black/white, 2 black/white/red) and size (0 auto, 1..3 = the
+    // listed panels) overrides; the clock restarts to apply a change
     const panelColor = document.getElementById('panel-color');
-    let panelColorSupported = false;
-    let panelColorCurrent = '0';
-    panelColor.addEventListener('focus', () => { panelColorCurrent = panelColor.value; });
-    panelColor.addEventListener('change', async () => {
-      const value = panelColor.value;
-      if (!await confirmDialog('Change panel colour type?', 'The clock will restart to apply this. Choose the type that matches the attached e-paper panel.', 'Change')) {
-        panelColor.value = panelColorCurrent;
+    const panelSize = document.getElementById('panel-size');
+    let panelColorSupported = false, panelSizeSupported = false;
+    let panelCurrent = { color: '0', size: '0' };
+    async function onPanelConfig() {
+      const dev = lastDevice;
+      const restore = () => { panelColor.value = panelCurrent.color; panelSize.value = panelCurrent.size; };
+      if (!await confirmDialog('Change panel settings?', 'The clock will restart to apply this. Choose the values that match the attached e-paper panel.', 'Change')) {
+        restore();
         return;
       }
-      const dev = lastDevice;
       try {
-        await longValue.writeValueWithResponse(Uint8Array.of(0x97, Number(value)));
+        await longValue.writeValueWithResponse(Uint8Array.of(0x97, Number(panelColor.value), Number(panelSize.value)));
         // A reply means the clock did not restart (unsupported or unchanged)
-        notify('The clock did not restart - the colour type was not changed.', 'warning');
-        panelColor.value = panelColorCurrent;
+        notify('The clock did not restart - the panel settings were not changed.', 'warning');
+        restore();
         return;
       } catch (e) { /* expected: the clock restarts and drops the link */ }
-      notify('Restarting the clock to apply the panel colour type...', 'info');
+      notify('Restarting the clock to apply the panel settings...', 'info');
       await reconnectAfterReset(dev, true);
-    });
+    }
+    panelColor.addEventListener('change', onPanelConfig);
+    panelSize.addEventListener('change', onPanelConfig);
 
     async function onUpdate() {
       const upfirmButton = document.getElementById('upfirm-button');

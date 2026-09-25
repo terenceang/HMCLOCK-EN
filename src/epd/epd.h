@@ -36,8 +36,17 @@ int img_present(int xres, int yres);
 int img_render(int xres, int yres);
 int img_mode_get(void);
 void img_mode_set(int mode);
-void panel_color_set(int colour);
+void panel_config_set(int colour, int size);
 extern int panel_color_ovr;
+extern int panel_size_ovr;
+
+// Panel resolutions the card layout is proportioned against (landscape drawing
+// coordinates; the driver's native w x h is yres x xres). Also the sizes the
+// panel-size override can pick, by 1-based index.
+typedef struct {
+	int xres, yres;
+}LAYOUT;
+extern LAYOUT layouts[3];
 
 // Boot/flash diagnostics filled in by selflash(); readable via the FF04
 // characteristic (diag_val_update()). See spi_flash.c for the byte layout.

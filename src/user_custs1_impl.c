@@ -326,7 +326,7 @@ static int layout_yres(void);
 
 void clock_push(void)
 {
-	struct custs1_val_set_req *req = val_set_alloc(SVC1_IDX_LONG_VALUE_VAL, 18);
+	struct custs1_val_set_req *req = val_set_alloc(SVC1_IDX_LONG_VALUE_VAL, 19);
 
 	req->value[0] = year&0xff;
 	req->value[1] = year>>8;
@@ -347,6 +347,7 @@ void clock_push(void)
 	req->value[15]= display_mode;
 	req->value[16]= (scr_mode&EPD_BWR)? 1 : 0;	// panel colours: 0 = black/white, 1 = black/white/red
 	req->value[17]= panel_color_ovr;			// colour override: 0 = auto, 1 = black/white, 2 = black/white/red
+	req->value[18]= panel_size_ovr;			// size override: 0 = auto, 1..3 = layouts[] index + 1
 	KE_MSG_SEND(req);
 }
 
@@ -436,10 +437,6 @@ static void draw_bt(int x, int y)
 
 
 /****************************************************************************************/
-
-typedef struct {
-	int xres, yres;
-}LAYOUT;
 
 // Panel resolutions the card layout is proportioned against (see clock_draw()); only the
 // 212x104 panel is actually populated on the HMCLOCK board (see Hardware/HINK-E0213A41-FPC.md).
@@ -931,7 +928,8 @@ void user_svc1_ctrl_wr_ind_handler(ke_msg_id_t const msgid,
  * Handles commands:
  * - 0x91: clock-set command
  * - 0x93-0x96: display mode + image upload (see image_cmd)
- * - 0x97: panel colour override (0 auto, 1 black/white, 2 black/white/red)
+ * - 0x97 colour size: panel overrides (colour 0 auto, 1 black/white, 2 black/white/red;
+ *   size 0 auto, 1..3 = layouts[] index + 1)
  * - 0xA0 and above: OTA update related commands
  */
 void user_svc1_long_val_wr_ind_handler(ke_msg_id_t const msgid,
@@ -965,9 +963,9 @@ void user_svc1_long_val_wr_ind_handler(ke_msg_id_t const msgid,
 		clock_fixup_set(diff_sec, cal_minute);
 		cal_minute = 0;
 	}else if(param->value[0]==0x97){
-		// Panel colour override; the chip restarts if it changed
-		if(len<2 || ota_state) return;
-		panel_color_set(param->value[1]);
+		// Panel colour + size override; the chip restarts if either changed
+		if(len<3 || ota_state) return;
+		panel_config_set(param->value[1], param->value[2]);
 	}else if(param->value[0]>=0x93 && param->value[0]<=0x96){
 		// Display mode / image upload
 		image_cmd((const uint8_t*)param->value, len);
