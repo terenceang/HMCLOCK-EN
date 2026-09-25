@@ -33,10 +33,10 @@ The clock drives every panel in **black and white** only (the red plane of tri-c
 | Model | Size | Colors | Resolution | Interface | Status |
 |-------|------|--------|------------|-----------|--------|
 | HINK-E0213A41/A55 | 2.13" | B/W | 212×104 | Soldered | Tested working (A41-FPC). Reference panel on the HMCLOCK board |
-| HINK-E0213A53-FPC-A0 | 2.13" | B/W | ? | Soldered | Tested working |
-| HINK-E0213A07-A1 | 2.13" | B/W | ? | Socket | Tested working |
+| HINK-E0213A53-FPC-A0 | 2.13" | B/W | 212×104 | Soldered | Tested working |
+| HINK-E0213A07-A1 | 2.13" | B/W | 212×104 | Socket | Tested working |
 | OPM021B1 | 2.13" | B/W | 250×122 | Socket | Not tested |
-| HINK-E0213A22-A0 | 2.13" | B/W/Red | 250×122 | ? | Works in B/W only; select `250 x 122`. Contrast was weak, probably because the board's boost circuit is sized for the A41 |
+| HINK-E0213A22-A0 | 2.13" | B/W/Red | 250×122 | Soldered | Works in B/W only; select `250 x 122`. Contrast was weak, probably because the board's boost circuit is sized for the A41 |
 | HINK-E0213A67 | 2.13" | B/W/Red | 250×122 | Soldered | Not tested |
 | HINK-E029A10 | 2.9" | B/W/Red | 296×128 | Socket | Not tested (layout only) |
 
