@@ -411,6 +411,29 @@ static void sf_write_mem(int dst, u8 *src, int len)
 	}
 }
 
+// Product header: magic 70 52, then the two image slot addresses.
+#define PRODUCT_HDR   0x38000
+#define DEF_SLOT0     0x04000
+#define DEF_SLOT1     0x1f000
+
+// Fill addr[2] with the image slot addresses from the product header; returns
+// 1 if the header is valid, else 0 with the default slot addresses filled in.
+static int product_slots(int *addr)
+{
+	u8 b[16];
+	u32 *p = (u32*)b;
+
+	sf_read(PRODUCT_HDR, 16, b);
+	if(b[0]==0x70 && b[1]==0x52){
+		addr[0] = p[1];
+		addr[1] = p[2];
+		return 1;
+	}
+	addr[0] = DEF_SLOT0;
+	addr[1] = DEF_SLOT1;
+	return 0;
+}
+
 // Install the running image (RAM at 0x07fc0000) into the primary image slot
 // (product header slot 0) -- the slot the boot chain actually boots on these
 // units. Header uses the Dialog SUOTA layout: 70 51 AA <imageid>, code_size,
@@ -543,18 +566,15 @@ int selflash(int otp_boot)
 		// Booted via the OTP/ROM boot chain. Read the product header to find
 		// the image slots, then install the running firmware into the primary
 		// slot with a generation id that outranks both existing slots.
-		sf_read(0x38000, 16, pbuf);
-		if(pbuf[0]!=0x70 || pbuf[1]!=0x52){
+		if(!product_slots(image_addr)){
 			printk("Build Product header ...\n");
 			p32[0] = 0x00005270;
-			p32[1] = 0x00004000;
-			p32[2] = 0x0001f000;
-			sf_sector_erase(ERASE_4K, 0x38000, 1);
-			sf_page_write(0x38000, pbuf, 12);
+			p32[1] = image_addr[0];
+			p32[2] = image_addr[1];
+			sf_sector_erase(ERASE_4K, PRODUCT_HDR, 1);
+			sf_page_write(PRODUCT_HDR, pbuf, 12);
 			sf_wait();
 		}
-		image_addr[0] = p32[1];
-		image_addr[1] = p32[2];
 		printk("Slots: %08x + %08x\n", image_addr[0], image_addr[1]);
 
 		selflash_install(firm_size, image_addr[0], image_addr[1]);
@@ -569,14 +589,7 @@ int selflash(int otp_boot)
 
 		// Best-effort diagnostics: expose the A/B image versions and slot
 		// addresses (product header if valid, defaults otherwise).
-		sf_read(0x38000, 12, pbuf);
-		if(pbuf[0]==0x70 && pbuf[1]==0x52){
-			image_addr[0] = p32[1];
-			image_addr[1] = p32[2];
-		}else{
-			image_addr[0] = 0x04000;
-			image_addr[1] = 0x1f000;
-		}
+		product_slots(image_addr);
 		sf_read(image_addr[0]+28, 4, (u8*)flash_diag+20);
 		sf_read(image_addr[1]+28, 4, (u8*)flash_diag+24);
 		flash_diag_set(28, image_addr[0]);
@@ -626,7 +639,6 @@ void ota_abort(void)
 int ota_handle(u8 *buf, int len)
 {
 	u8 *pbuf = ota_buf;
-	u32 *p32 = (u32*)pbuf;
 	int image_addr[2];
 	int image_flag[2];
 
@@ -652,17 +664,15 @@ int ota_handle(u8 *buf, int len)
 		int id = sf_readid();
 		printk("flash id: %04x\n", id);
 
-		sf_read(0x38000, 16, pbuf);
-		image_addr[0] = p32[1];
-		image_addr[1] = p32[2];
+		int hdr_ok = product_slots(image_addr);
 		printk("image0: %08x   image1: %08x\n", image_addr[0], image_addr[1]);
 
 		// Trust the product header only if it is valid and sane: magic present,
 		// slots 4K-aligned and below the header itself.
-		if(pbuf[0]!=0x70 || pbuf[1]!=0x52 || firm_size==0 ||
+		if(!hdr_ok || firm_size==0 ||
 		   (image_addr[0]|image_addr[1])&0xfff ||
 		   image_addr[0]<=0 || image_addr[1]<=0 ||
-		   image_addr[0]>=0x38000 || image_addr[1]>=0x38000 ||
+		   image_addr[0]>=PRODUCT_HDR || image_addr[1]>=PRODUCT_HDR ||
 		   image_addr[0]==image_addr[1]){
 			printk("OTA rejected: bad product header or size\n");
 			fspi_exit();
@@ -689,8 +699,8 @@ int ota_handle(u8 *buf, int len)
 		firm_addr = image_addr[new_id];
 
 		// The image (plus its 64-byte prologue) must fit before the next region:
-		// the other slot if it lies above, else the product header at 0x38000.
-		int slot_end = (image_addr[new_id] < image_addr[active]) ? image_addr[active] : 0x38000;
+		// the other slot if it lies above, else the product header.
+		int slot_end = (image_addr[new_id] < image_addr[active]) ? image_addr[active] : PRODUCT_HDR;
 		if(firm_size+64 > slot_end-firm_addr){
 			printk("OTA rejected: image does not fit slot\n");
 			fspi_exit();
