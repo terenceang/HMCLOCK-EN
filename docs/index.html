@@ -343,6 +343,8 @@
     <footer class="mt-6 text-center text-xs text-gray-600 dark:text-slate-300">
       <p>HM CLOCK Bluetooth Control Tool &copy; <a href="https://github.com/tpunix/HMCLOCK" target="_blank" rel="noopener" class="underline text-primary">https://github.com/tpunix/HMCLOCK</a></p>
       <p class="mt-1">Fork by Terence Ang - motionfxdesign</p>
+      <!-- The placeholder below is replaced with the commit + time by .github/workflows/sync-docs.yml when publishing -->
+      <p class="mt-1">Web app build: <span id="web-build">b2e0580, 2026-09-25 02:52 UTC</span></p>
       <p class="mt-1">Shortcuts: <kbd>C</kbd> connect / disconnect &middot; <kbd>S</kbd> sync time &middot; <kbd>D</kbd> switch clock / image</p>
     </footer>
   </div>
@@ -831,6 +833,10 @@
         showStatus(describeError(error));
       }
     }
+
+    // Footer build stamp: filled in by the publish workflow, so an unstamped copy is a local file
+    const webBuild = document.getElementById('web-build');
+    if (webBuild.textContent.startsWith('__')) webBuild.textContent = 'local copy (not published)';
 
     // Time sync
     const autoSync = document.getElementById('opt-autosync');
