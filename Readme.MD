@@ -100,7 +100,7 @@ After syncing the time, performing two calibrations 2 to 3 weeks apart will keep
 * Once the device is connected, click the "Time Calibration" button and wait about one minute.
 * Perform a time synchronization immediately after calibration.
 
-![Control Panel](./images/ctrl.png)
+![Control Panel](./images/Control%20Panel.png)
 
 When powered on for the first time, it will show a pairing page. Scan the QR code to open the web page and pair.
 
