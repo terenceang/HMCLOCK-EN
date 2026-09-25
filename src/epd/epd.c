@@ -421,6 +421,26 @@ void epd_screen_clean(int mode)
 /******************************************************************************/
 
 
+// Raw temperature register (16 bits, MSB first; value/256 = degrees C) read
+// back from the controller at boot, 0/0 if it was never read.
+u8 epd_temp[2];
+
+// Have the controller measure the temperature (internal sensor) and read the
+// result back. This is the value it picks the waveform from.
+static void epd_read_temp(void)
+{
+	u8 t[2] = {0, 0};
+
+	epd_cmd1(0x18, 0x80);   // internal temperature sensor
+	epd_cmd1(0x22, 0xb1);   // enable clock + analog, load temperature
+	epd_cmd(0x20);
+	delay_ms(10);           // let BUSY rise before waiting on it
+	epd_wait();
+	epd_cmd_read(0x1b, t, 2);
+	epd_temp[0] = t[0];
+	epd_temp[1] = t[1];
+}
+
 int epd_detect(void)
 {
 	int retv;
@@ -437,6 +457,7 @@ int epd_detect(void)
 	// means the pin reads "busy" even with no panel or the wrong pins wired,
 	// so it would report every guess as a hit.
 	retv = (epd_lut_size() > 0);
+	if(retv) epd_read_temp();
 	epd_hw_close();
 	return retv;
 }

@@ -326,7 +326,7 @@ static int layout_yres(void);
 
 void clock_push(void)
 {
-	struct custs1_val_set_req *req = val_set_alloc(SVC1_IDX_LONG_VALUE_VAL, 20);
+	struct custs1_val_set_req *req = val_set_alloc(SVC1_IDX_LONG_VALUE_VAL, 22);
 
 	req->value[0] = year&0xff;
 	req->value[1] = year>>8;
@@ -349,6 +349,8 @@ void clock_push(void)
 	req->value[17]= panel_color_ovr;			// colour override: 0 = auto, 1 = black/white, 2 = black/white/red
 	req->value[18]= panel_size_ovr;			// size override: 0 = auto, 1..3 = layouts[] index + 1
 	req->value[19]= lut_size;				// controller waveform register size (70 / 100 / 153 ...)
+	req->value[20]= epd_temp[0];			// controller temperature register (16 bit, value/256 = degrees C)
+	req->value[21]= epd_temp[1];
 	KE_MSG_SEND(req);
 }
 
