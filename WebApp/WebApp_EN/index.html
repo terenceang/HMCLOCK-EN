@@ -832,6 +832,11 @@
         buf.set([0x91, year % 256, Math.floor(year / 256), month, mday, hour, minute, second, wday]);
         await longValue.writeValueWithResponse(buf);
 
+        // The write is acknowledged even when the clock rejects the time as out of
+        // range; a synced clock reports minutes-since-sync >= 0 (bytes 7..10)
+        const echo = await longValue.readValue();
+        if (echo.byteLength >= 11 && echo.getInt32(7, true) < 0) throw new Error('the clock rejected the time');
+
         // Update the device time baseline
         deviceTimeBase = { year, month, mday, hour, minute, second, timestamp: new Date() };
 

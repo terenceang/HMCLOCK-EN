@@ -82,7 +82,7 @@ int adc1_update(void);
 void diag_val_update(void);
 int clock_update(int inc);
 void clock_print(void);
-void clock_set(uint8_t *buf);
+int clock_set(uint8_t *buf);
 void clock_push(void);
 void clock_draw(int full);
 void QR_draw(int mode);

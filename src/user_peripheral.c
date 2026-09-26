@@ -293,6 +293,12 @@ static void app_clock_timer_cb(void)
 		clock_push();
 	}
 
+	// Firmware update in progress: keep counting time, but no ADC read, panel
+	// refresh or advertising until it ends (the next tick redraws)
+	if(ota_state){
+		return;
+	}
+
     // Not yet synced -- show the pairing QR code instead of the clock face.
     // Unlike the synced clock's power-saving 10-minute duty cycle, redraw and
     // re-advertise every minute here: an unpaired tag needs to stay
@@ -420,9 +426,24 @@ void user_app_on_db_init_complete( void )
 // SDK advertising-timeout hook: fires when the timeout timer stops advertising, so
 // adv_state is cleared even if the stack's advertising-complete event never reaches
 // user_app_adv_undirect_complete (a stuck adv_state blocks every later restart)
+// Redraw whichever screen applies so the Bluetooth icon matches the current state
+// (image mode keeps its picture; the pairing QR shows until the first sync)
+static void screen_refresh(void)
+{
+	if(display_mode==1){
+	}
+	else if(cal_minute<0){
+		QR_draw(UPDATE_FLY);
+	}
+	else
+		clock_draw(UPDATE_FLY);
+}
+
 static void adv_timeout_cb(void)
 {
+	if(!adv_state) return;
 	adv_state = 0;
+	screen_refresh();	// take the icon off now, not at the next minute tick
 }
 
 /**
@@ -437,8 +458,8 @@ void user_app_adv_start(void)
 	u8 vbuf[6]; // Version-info AD structure buffer
 
 	// Return immediately if already advertising, connected (a connected
-	// peripheral cannot advertise; adv_state is not cleared on connect), or
-	// mid firmware update (disconnect aborts the update before re-advertising)
+	// peripheral cannot advertise), or mid firmware update (disconnect aborts
+	// the update before re-advertising)
 	if(adv_state || app_connection_idx!=-1 || ota_state)
 		return;
 	adv_state = 1; // Mark as advertising
@@ -484,6 +505,7 @@ void user_app_connection(uint8_t connection_idx, struct gapc_connection_req_ind 
     if (app_env[connection_idx].conidx != GAP_INVALID_CONIDX)
     {
         app_connection_idx = connection_idx; // Update the connection index
+        adv_state = 0; // a connection ends advertising; the icon now follows the link
 
 		// Print the connection parameters
 		printk("  interval: %d\n", param->con_interval);
@@ -521,20 +543,14 @@ void user_app_connection(uint8_t connection_idx, struct gapc_connection_req_ind 
 void user_app_adv_undirect_complete(uint8_t status)
 {
 	printk("user_app_adv_undirect_complete: %02x\n", status);
-	// A non-zero status means it ended abnormally; update the advertising
-	// state and refresh the screen
 	// Advertising is over either way, so always clear the state (otherwise a
-	// status-0 stop would block every later user_app_adv_start)
+	// status-0 stop would block every later user_app_adv_start). Redraw only if
+	// this is news: the timeout hook (adv_timeout_cb) may already have done it,
+	// and a status-0 end is a connection, whose icon is already up.
+	int was_advertising = adv_state;
 	adv_state = 0;
-	if(status!=0){
-		// Not yet synced -- show the pairing QR code (image mode keeps its picture)
-		if(display_mode==1){
-		}
-		else if(cal_minute<0){
-			QR_draw(UPDATE_FLY);
-		}
-		else
-			clock_draw(UPDATE_FLY);
+	if(status!=0 && was_advertising){
+		screen_refresh();
 	}
 }
 
@@ -569,14 +585,7 @@ void user_app_disconnect(struct gapc_disconnect_ind const *param)
 	if(param->reason!=CO_ERROR_REMOTE_USER_TERM_CON){
 		user_app_adv_start();
 	}else{
-		// Not yet synced -- show the pairing QR code (image mode keeps its picture)
-		if(display_mode==1){
-		}
-		else if(cal_minute<0){
-			QR_draw(UPDATE_FLY);
-		}
-		else
-			clock_draw(UPDATE_FLY);
+		screen_refresh();
 	}
 }
 

@@ -290,7 +290,8 @@ int clock_update(int inc)
 	return retv;
 }
 
-void clock_set(uint8_t *buf)
+// Returns 0 on success, -1 if the time was out of range (nothing changed)
+int clock_set(uint8_t *buf)
 {
 	int new_year   = buf[1] + buf[2]*256;
 	int new_month  = buf[3];
@@ -302,12 +303,12 @@ void clock_set(uint8_t *buf)
 
 	// Reject out-of-range values -- this data comes straight from an
 	// unauthenticated BLE write.
-	if(new_month<0 || new_month>11)   return;
-	if(new_date<0  || new_date>30)    return;
-	if(new_hour<0  || new_hour>23)    return;
-	if(new_minute<0 || new_minute>59) return;
-	if(new_second<0 || new_second>59) return;
-	if(new_wday<0  || new_wday>6)     return;
+	if(new_month<0 || new_month>11)   return -1;
+	if(new_date<0  || new_date>30)    return -1;
+	if(new_hour<0  || new_hour>23)    return -1;
+	if(new_minute<0 || new_minute>59) return -1;
+	if(new_second<0 || new_second>59) return -1;
+	if(new_wday<0  || new_wday>6)     return -1;
 
 	year   = new_year;
 	month  = new_month;
@@ -320,6 +321,7 @@ void clock_set(uint8_t *buf)
 	cal_minute = 0;
 
 	app_clock_timer_restart();
+	return 0;
 }
 
 
@@ -543,6 +545,10 @@ void QR_draw(int mode)
 {
 	char tbuf[16];
 	int w;
+
+	if(ota_state){
+		return;		// firmware update in progress: keep the panel and flash SPI quiet
+	}
 
 	// Current panel in landscape drawing coordinates (set by select_layout())
 	int xres = layout_xres();
@@ -1012,7 +1018,10 @@ void user_svc1_long_val_wr_ind_handler(ke_msg_id_t const msgid,
 	if(param->value[0]==0x91){
 		// Set the clock (needs at least buf[1..8], 9 bytes total)
 		if(len<9) return;
-		clock_set((uint8_t*)param->value);
+		// A rejected (out-of-range) time changes nothing: no redraw, and no push, so
+		// the web app's read-back still shows cal_minute<0 and reports the failure
+		if(clock_set((uint8_t*)param->value)!=0) return;
+		clock_push();	// publish the synced state for that read-back
 		// Update the display (with Bluetooth icon, fast update mode); image mode
 		// keeps its picture and only takes the new time
 		if(display_mode!=1)
@@ -1021,7 +1030,7 @@ void user_svc1_long_val_wr_ind_handler(ke_msg_id_t const msgid,
 		clock_print();
 	}else if(param->value[0]==0x92){
 		// Time calibration (needs at least buf[1..2], 3 bytes total)
-		if(len<3) return;
+		if(len<3 || cal_minute<0) return;	// nothing to calibrate before the first sync
 		int diff_sec;
 		diff_sec  = param->value[1];
 		diff_sec |= param->value[2]<<8;
