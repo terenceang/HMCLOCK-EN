@@ -139,7 +139,7 @@ When powered on for the first time, it will show a pairing page. Scan the QR cod
 
 ## Power Profile
 
-Measured with a Nordic Power Profiler Kit II in source-meter mode (100 kHz sampling), on the panel-and-board combination used for development. The advertising figures are from test builds using the same advertising settings as the current firmware (0xA50f0035); treat everything here as approximate.
+Measured with a Nordic Power Profiler Kit II in source-meter mode (100 kHz sampling), on the panel-and-board combination used for development. The advertising figures are from test builds using the same advertising settings as the current firmware; the refresh figures are from build 0xA50f003c. Treat everything here as approximate.
 
 | State | Current / charge | Notes |
 |---|---|---|
@@ -149,18 +149,22 @@ Measured with a Nordic Power Profiler Kit II in source-meter mode (100 kHz sampl
 | Advertising every 5.12 s (synced) | **about 5.3 µA** average | 3.2 µA sleep + about 2.1 µA of events |
 | Advertising every 0.69 s (pairing screen) | about 19 µA average | used only until the first sync |
 | Connected, idle | about 95 µA average | before the slower connection parameters apply |
-| Panel fast refresh (every minute) | about 2.0 mC, up to about 40 mA, about 2.5 s | followed by about 47 µA for about 2.5 s (about 0.12 mC) |
+| Panel FLY refresh (every minute, build 0xA50f003c) | about 0.84 mC, up to about 40 mA, about 0.56 s | plus a tail of about 0.06 mC; was about 1.6 mC and 0.96 s before the phase-length change |
+| Panel FAST refresh (time sync only) | about 2.9 mC, about 1.8 s | no longer used on a schedule |
+| Panel FULL refresh (every 3 h, midnight scrub) | about 4.8 – 6.3 mC, 3.2 – 4.4 s | |
 | Power-on, boot and pairing-screen draw | about 11.9 mC over about 5 s | full refresh; brief inrush of over 100 mA |
 
 The BLE stack idles at about 18 µA when nothing is scheduled but only about 3 µA when it has a periodic event to wake for, so the clock advertises for good (0.69 s before the first sync, 5.12 s after) instead of stopping. A 10.24 s interval was too slow for a browser or phone to find the clock, and 2.56 s works but costs more.
 
-**Estimated average, synced and advertising:** 60 refreshes an hour at about 2 mC is about 123 mC, and advertising plus sleep is about 19 mC, so roughly **142 mC/h, or about 40 µA**. The panel refresh is about 85% of that, so refreshing less often saves far more than any radio change.
+**Measured, synced and advertising (build 0xA50f003c, 60 s cycle with one FLY tick):** 1.43 – 1.51 mC per minute, so **about 24 – 25 µA**. With the FULL refresh every 3 hours (about 0.5 µA) and the midnight scrub (about 0.15 µA) the steady average is **about 26 µA**, against about 40 µA before the refresh optimisation. The FLY refresh is still most of it, but advertising plus sleep is only about 5.7 µA.
 
-| Battery (parallel cells) | Usable capacity (assumed) | Estimated life |
+**Real-world battery life (estimates).** The averages above assume the cell delivers its rating. The 30 – 40 mA refresh peaks and the boot inrush sag a coin cell, whose internal resistance is roughly 10 – 20 Ω, so the usable capacity here is taken as about 65% of the rating. Time syncs and firmware updates are not included: a sync is seconds of about 95 µA plus one 2.9 mC refresh, and an update is guessed at 100 – 400 mC (not measured), under 1% of a coin cell even if done weekly.
+
+| Battery (parallel cells) | Usable capacity (assumed, about 65%) | Estimated life at about 26 µA |
 |---|---|---|
-| 1 × CR2032 | about 200 mAh | about 210 days |
-| 2 × CR2032 | about 400 mAh | about 420 days |
-| 2 × CR2450 | about 1000 mAh | about 1050 days |
+| 1 × CR2032 | about 130 mAh | about 210 days (marginal: voltage sag under the pulses) |
+| 2 × CR2032 | about 260 mAh | about 420 days |
+| 2 × CR2450 | about 650 mAh | about 1000 days |
 
 These are estimates: the refresh charge varied between captures (2.0 to 4.4 mC, depending on the waveform and probably the supply voltage), and coin cells deliver less than their rating at the 2.6 V cut-off and under the panel's current pulses. Compare charges within one capture, and set the PPK supply to the voltage the clock will really see.
 
