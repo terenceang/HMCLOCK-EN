@@ -255,7 +255,7 @@ void date_inc(void)
 
 // 0: no change
 // 1: minute changed
-// 2: minute changed, on a 10-minute boundary
+// 2: minute changed, on a 15-minute boundary (:15/:30/:45; :00 is 3 or 4)
 // 3: hour changed
 // 4: day changed
 
@@ -270,7 +270,7 @@ int clock_update(int inc)
 
 	minute += 1;
 	retv = 1;
-	if((minute%10)==0)
+	if((minute%15)==0)
 		retv = 2;
 
 	if(cal_minute>=0)

@@ -55,7 +55,7 @@
  ****************************************************************************************
  */
 
-#define EPD_VERSION 0xA50f002e
+#define EPD_VERSION 0xA50f002f
 
 
 /*
@@ -348,7 +348,7 @@ static const struct default_handlers_configuration  user_default_hnd_conf = {
     // Configure the advertise period in case of DEF_ADV_WITH_TIMEOUT.
     // It is measured in timer units (10 ms). Use MS_TO_TIMERUNITS macro to convert
     // from milliseconds (ms) to timer units.
-    // Fires once every ~10-minute clock cycle (app_clock_timer_cb, user_peripheral.c) --
+    // Fires once every 15-minute clock cycle (:00/:15/:30/:45) (app_clock_timer_cb, user_peripheral.c) --
     // 15s is still a generous connect window (real connects complete in 1-3s once
     // initiated) at roughly half the previous radio-on duty cycle (30s->15s per burst).
     .advertise_period = MS_TO_TIMERUNITS(15000),

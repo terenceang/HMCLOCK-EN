@@ -151,6 +151,12 @@ For full logs, enable `CFG_PRINTF` in
 3. The device writes the image into the inactive slot with a bumped generation
    id, verifies a CRC32 of the received payload, then resets into the new
    image.
+4. While an update is running the clock stops advertising and leaves the panel
+   untouched (it still keeps time). After a good update it resets into the new
+   image, boots to the unsynced pairing screen (advertising every minute) and
+   the page reconnects; sync the time again. If the transfer fails or the link
+   drops, the update is aborted, the half-written slot stays invalid, and the
+   clock resumes normal advertising.
 
 > **Known limitation on slot-0-booting units:** OTA writes the *inactive*
 > slot, but the boot chain on these units boots slot 0 unconditionally — so an

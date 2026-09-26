@@ -300,7 +300,7 @@ static void app_clock_timer_cb(void)
 	}
 
     // Not yet synced -- show the pairing QR code instead of the clock face.
-    // Unlike the synced clock's power-saving 10-minute duty cycle, redraw and
+    // Unlike the synced clock's power-saving 15-minute duty cycle, redraw and
     // re-advertise every minute here: an unpaired tag needs to stay
     // discoverable and visibly alive, since battery life doesn't matter yet.
     if(cal_minute<0){
@@ -441,9 +441,9 @@ static void screen_refresh(void)
 
 static void adv_timeout_cb(void)
 {
-	if(!adv_state) return;
+	// No redraw here: the per-minute redraw takes the icon off within 60 s, and
+	// a refresh of its own would cost more than the advertising burst itself
 	adv_state = 0;
-	screen_refresh();	// take the icon off now, not at the next minute tick
 }
 
 /**

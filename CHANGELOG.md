@@ -1,5 +1,12 @@
 # Changelog
 
+## 0xA50f002f
+
+* **Advertising every 15 minutes** (:00, :15, :30, :45) instead of every 10, and the Bluetooth icon no longer triggers an extra panel refresh when the advertising burst ends (it clears at the next minute redraw). Saves roughly 5 uA of average current.
+* **Bluetooth icon** now shows while advertising or connected, in the top-right of the left card, on both the clock and the pairing screen.
+* **Advertising fixes:** the advertising state is also cleared by the SDK timeout hook and on connect, so a missed complete event can no longer block later bursts; advertising is not started while connected or during a firmware update, and the panel stays untouched during an update.
+* **Time sync:** a rejected (out-of-range) time no longer redraws the clock, calibration is ignored before the first sync, and the web app reads back the state and reports a rejected sync and a dropped link.
+
 ## 0xA50f0027
 
 * **Advertising cleanup:** the advertising state is always cleared when advertising completes, and the version tag in the advertising data uses company ID `0xFFFF`.
