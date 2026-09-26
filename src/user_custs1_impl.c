@@ -61,6 +61,9 @@
 int adcval;
 
 extern int adv_state;
+extern int app_connection_idx;
+// Bluetooth is "active" while advertising or connected: the icon follows this
+#define BT_ACTIVE() (adv_state || app_connection_idx!=-1)
 /*
  * FUNCTION DEFINITIONS
  ****************************************************************************************
@@ -569,8 +572,8 @@ void QR_draw(int mode)
 	int col_cx = (col_x1 + col_x2)/2;
 
 	draw_text_centered(col_cx, qcy-47, "Bluetooth", BLACK);
-	if(adv_state){
-		// Bluetooth icon, shown only while advertising -- mirrors clock_draw()'s DRAW_BT icon
+	if(BT_ACTIVE()){
+		// Bluetooth icon, shown while advertising or connected -- mirrors clock_draw()
 		draw_bt(xres-17, qcy-43);
 	}
 	sprintf(tbuf, "DCLK-%s", bt_id);
@@ -845,8 +848,8 @@ void clock_draw(int flags)
 
 		draw_rect(x1, y1, x2, y2, BLACK);
 
-		if((flags&DRAW_BT) || adv_state){
-			draw_bt(x1+26, y1+1); // beside the battery, inside the left card
+		if(BT_ACTIVE()){
+			draw_bt(x2-11, y1+1); // top-right corner, mirroring the battery at top-left
 		}
 		draw_batt(x1+5, y1+8);
 

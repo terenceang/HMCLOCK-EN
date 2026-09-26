@@ -715,7 +715,12 @@
         console.log('Device name:', device.name);
         document.getElementById('device_name').textContent = device.name;
         setValueStyle('device_name', false);
-        device.ongattserverdisconnected = onDisconnect;
+        // Link dropped from the clock's side (out of range, it went to sleep, it
+        // reset): tell the user. connected is already false after a Disconnect click.
+        device.ongattserverdisconnected = () => {
+          if (connected) notify('Bluetooth disconnected from the clock.', 'warning');
+          onDisconnect();
+        };
         lastDevice = device;
         try { localStorage.setItem(LAST_DEVICE_KEY, JSON.stringify({ id: device.id, name: device.name })); } catch (e) { /* not persisted */ }
 
@@ -1119,6 +1124,14 @@
     function onDisconnect() {
       device = null;
       connected = false;
+
+      // A dropped link never went through disconnect(): stop the live clock
+      // readout, otherwise it keeps ticking over the "--:--:--" placeholder
+      if (deviceTimeInterval) {
+        clearInterval(deviceTimeInterval);
+        deviceTimeInterval = null;
+      }
+      deviceTimeBase = null;
 
       document.getElementById('device_name').textContent = "--";
       document.getElementById('current_voltage').textContent = "--.- V";

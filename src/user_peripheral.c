@@ -428,8 +428,10 @@ void user_app_adv_start(void)
 {
 	u8 vbuf[6]; // Version-info AD structure buffer
 
-	// Return immediately if already advertising
-	if(adv_state)
+	// Return immediately if already advertising, connected (a connected
+	// peripheral cannot advertise; adv_state is not cleared on connect), or
+	// mid firmware update (disconnect aborts the update before re-advertising)
+	if(adv_state || app_connection_idx!=-1 || ota_state)
 		return;
 	adv_state = 1; // Mark as advertising
 
