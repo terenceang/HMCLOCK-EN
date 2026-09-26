@@ -110,7 +110,7 @@ u8 lut_fly_100[112] = {
 
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  // LUT4
 
-    0x0f, 0x00, 0x00, 0x00, 0x01,  // Group0
+    0x05, 0x00, 0x00, 0x00, 0x01,  // Group0  (was 0x0f: 46% less charge, 3 h no-FULL soak clean)
     0x00, 0x00, 0x00, 0x00, 0x01,  // Group1
     0x00, 0x00, 0x00, 0x00, 0x01,  // Group2
     0x00, 0x00, 0x00, 0x00, 0x01,  // Group3
@@ -127,6 +127,11 @@ u8 lut_fly_100[112] = {
 
 u8 *lut_fast = lut_fast_70;
 u8 *lut_fly  = lut_fly_70;
+
+#ifdef EPD_EXPERIMENT
+int exp_diff = 0;
+static u8 fb_prev[4736];  // same size as fb_bw (FB_SIZE in epd_gui.c)
+#endif
 
 
 /******************************************************************************/
@@ -356,6 +361,20 @@ void epd_sleep(void)
 void epd_screen_update(void)
 {
 	int i;
+
+#ifdef EPD_EXPERIMENT
+	// Differential: previous frame into "old" RAM (0x26) so LUT row = old*2+new
+	// (LUT0 B->B, LUT1 B->W, LUT2 W->B, LUT3 W->W). RAM is lost at power-off, hence
+	// the copy kept in the MCU. FULL uses the OTP LUT, which must not see 0x26.
+	if(exp_diff && update_mode!=UPDATE_FULL){
+		epd_cmd(0x26);
+		for(i=0; i<win_h*line_bytes; i++){
+			epd_data(fb_prev[i]);
+		}
+		epd_window(0, 0, scr_w-1, scr_h-1);  // rewind the RAM pointer
+	}
+	memcpy(fb_prev, fb_bw, win_h*line_bytes);
+#endif
 
 	epd_cmd(0x24);  // write RAM for black(0)/white(1)
 	for(i=0; i<win_h*line_bytes; i++){

@@ -270,6 +270,8 @@ static void app_clock_timer_cb(void)
 	// Set for one minute after the nightly black scrub: that repaint must be
 	// a full update to restore the face over the all-black frame
 	static int scrub_next_full = 0;
+	static int hours_since_full = 0;
+#define FULL_EVERY_HOURS 3
 
 	if(first_timer_trigger) {
 		first_timer_trigger = 0;
@@ -330,23 +332,27 @@ static void app_clock_timer_cb(void)
         }
 	}
 
-	if(stat>=3){
-		flags = UPDATE_FULL; // Hourly full update
-		if(stat>=4){
-			// Midnight: nightly ghost scrub. This frame is driven solid black
-			// (clock_draw's DRAW_CLEAN path); queue a forced full redraw of
-			// the face on the next minute tick.
-			flags |= DRAW_CLEAN;
-			scrub_next_full = 1;
-		}
+	// FLY (TP A=5) held 3 h with no ghosting, so a full update is only needed every
+	// FULL_EVERY_HOURS hours, and there is no quarter-hour fast update any more
+	if(stat>=4){
+		// Midnight: nightly ghost scrub. This frame is driven solid black
+		// (clock_draw's DRAW_CLEAN path); queue a forced full redraw of
+		// the face on the next minute tick.
+		hours_since_full = 0;
+		flags = UPDATE_FULL | DRAW_CLEAN;
+		scrub_next_full = 1;
+	}else if(stat==3 && ++hours_since_full>=FULL_EVERY_HOURS){
+		hours_since_full = 0;
+		flags = UPDATE_FULL;
 	}else if(scrub_next_full){
 		// Repaint the face over the black scrub frame with a full update
 		scrub_next_full = 0;
 		flags = UPDATE_FULL;
-	}else if(stat>=2){
-		flags = UPDATE_FAST; // Quarter-hour fast update
 	}
 
+#ifdef EPD_SOAK
+	flags = UPDATE_FLY;  // ghosting soak: never FAST/FULL/scrub, every tick FLY
+#endif
 	// Update the screen based on the state or flags
 	// (image mode leaves the uploaded picture on the panel untouched)
 	if(stat>0 && display_mode!=1){
@@ -393,6 +399,9 @@ void user_app_on_db_init_complete( void )
 {
 	printk("\nuser_app_on_db_init_complete!\n");
 
+#ifdef EPD_SOAK
+	lut_fly[(lut_size==100)? 50 : 35] = 5;  // Group0 TP A: 15 -> 5 (46% less charge in EX03)
+#endif
 	// Update the ADC value and print the voltage
 	int adcval = adc1_update();
 	printk("Voltage: %d\n", adcval);
@@ -404,6 +413,16 @@ void user_app_on_db_init_complete( void )
 	clock_print();
 	clock_push();
 
+#if defined(EPD_EXPERIMENT) && !defined(EPD_SOAK)
+	// Power experiment first, with Bluetooth off; it calls user_boot_finish() when done
+	exp_start();
+}
+
+
+// Second half of boot: advertising, the pairing screen and the clock timer
+void user_boot_finish(void)
+{
+#endif
 	// Start advertising, then draw the pairing screen (draw after start so it
 	// reflects the just-started advertising/BT state)
 	user_app_adv_start();

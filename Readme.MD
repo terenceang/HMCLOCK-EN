@@ -164,6 +164,29 @@ The BLE stack idles at about 18 µA when nothing is scheduled but only about 3 �
 
 These are estimates: the refresh charge varied between captures (2.0 to 4.4 mC, depending on the waveform and probably the supply voltage), and coin cells deliver less than their rating at the 2.6 V cut-off and under the panel's current pulses. Compare charges within one capture, and set the PPK supply to the voltage the clock will really see.
 
+### Screen refresh optimisation (experiments)
+
+The per-minute FLY refresh is the biggest consumer, so it was profiled on a panel with the 100-byte LUT (Bluetooth off, PPK2 at 100 kHz, one refresh every 15 s). These are single captures, so treat them as approximate:
+
+| Variant | Duration | Charge |
+|---|---|---|
+| FLY, current LUT (phase length 15) | 937 ms | about 1.39 mC |
+| FLY, phase length 8 (Group0 TP A) | 660 ms | about 0.95 mC (−32%) |
+| FLY, phase length 5 | 541 ms | about 0.76 mC (−46%) |
+| FLY, differential (old frame in RAM 0x26) | 1135 ms | about 1.53 mC (+10%) |
+| FLY, differential, B→B and W→W rows zeroed | 1137 ms | about 1.45 mC (+5%) |
+| FAST | 1.77 s | about 2.67 mC |
+| FULL (OTP waveform) | 3.2 – 4.4 s | about 4.8 – 6.3 mC |
+
+* **Shorter phase length** is the one that pays off: the waveform time and charge fall with it. Whether the image stays clean without a FULL refresh is being checked with a ghosting soak (build option `EPD_SOAK`: FLY with phase length 5 on every tick, no FAST, FULL or midnight scrub). **Result: 3 hours (180 FLY ticks) with no ghosting, so phase length 5 is now the shipped FLY LUT for 100-byte-LUT panels (build 0xA50f003b).** The 70-byte LUT was not tested and is unchanged.
+* **Differential refresh does not help**: the extra 0x26 write costs about 200 ms and 0.1 mC, and zeroing the B→B and W→W rows shortens nothing because the waveform length is set by the phase length, not the row contents.
+* The refresh cost splits roughly into 0.4 mC before the waveform (`epd_init` and the frame write over SPI), 0.6 to 1.1 mC of waveform and a small tail while the chip waits for the 400 ms BUSY poll. The first and last are candidates for later work.
+* FULL varied by about 30% between captures (probably the panel temperature, which selects the OTP waveform).
+
+**Refresh schedule now (build 0xA50f003c):** FLY every minute, a FULL refresh every 3 hours (was hourly), the midnight black scrub as before, and no quarter-hour FAST refresh (was 3 an hour). The BUSY poll after a refresh is 20 ms instead of 400 ms, so the chip goes back to sleep as soon as the panel finishes. Expected hourly charge is about 56 x 0.76 mC of FLY plus a FULL only every third hour, against about 56 x 1.39 mC + 3 x 2.7 mC + 5 mC before. This has not been re-measured yet.
+
+The experiment code sits behind `EPD_EXPERIMENT` in `src/config/user_config.h`: a BLE command `0x99` (differential on/off, patch a FLY LUT byte, redraw now) and a boot-time sequence of numbered refreshes, 15 s apart, for lining up PPK2 captures. Remove both defines for a normal build.
+
 ---
 
 ## Troubleshooting

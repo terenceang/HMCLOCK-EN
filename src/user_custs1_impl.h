@@ -86,6 +86,10 @@ int clock_set(uint8_t *buf);
 void clock_push(void);
 void clock_draw(int full);
 void QR_draw(int mode);
+#if defined(EPD_EXPERIMENT) && !defined(EPD_SOAK)
+void exp_start(void);
+void user_boot_finish(void);
+#endif
 void TEST_draw(void);
 void LB_draw(void);
 

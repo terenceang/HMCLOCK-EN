@@ -55,7 +55,12 @@
  ****************************************************************************************
  */
 
-#define EPD_VERSION 0xA50f0035
+#define EPD_VERSION 0xA50f003c
+
+// Power experiments: BLE 0x99 differential/LUT-patch hook (costs ~4.7 KB RAM). Remove when done.
+// #define EPD_EXPERIMENT
+// Ghosting soak: FLY with TP A=5 on every tick, no boot sequence, no FAST/FULL/scrub
+// #define EPD_SOAK
 
 
 /*

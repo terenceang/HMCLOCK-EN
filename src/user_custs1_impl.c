@@ -484,13 +484,16 @@ void select_layout(int xres, int yres)
  */
 // Set while a clean-up refresh is running; the picture is painted when it finishes
 static int image_pending = 0;
+// Set while the boot-time refresh experiment (exp_start) owns the panel
+static int exp_running = 0;
 static void image_paint(void);
 
 static void epd_wait_timer(void)
 {
     if(epd_busy()){
-        // Screen is still busy, check again in 400ms (app_easy_timer counts 10 ms slots)
-        epd_wait_hnd = app_easy_timer(40, epd_wait_timer);
+        // Screen is still busy, check again in 20ms (app_easy_timer counts 10 ms slots).
+        // Sleep stays off until the update ends, so a slow poll only wastes ~0.5 mA
+        epd_wait_hnd = app_easy_timer(2, epd_wait_timer);
     }else{
         // Screen update complete
         epd_wait_hnd = EASY_TIMER_INVALID_TIMER;
@@ -547,8 +550,8 @@ void QR_draw(int mode)
 	char tbuf[16];
 	int w;
 
-	if(ota_state){
-		return;		// firmware update in progress: keep the panel and flash SPI quiet
+	if(ota_state || exp_running){
+		return;		// firmware update / power experiment in progress: keep the panel quiet
 	}
 
 	// Current panel in landscape drawing coordinates (set by select_layout())
@@ -691,6 +694,85 @@ void TEST_draw(void)
 	epd_commit();
 }
 
+#if defined(EPD_EXPERIMENT) && !defined(EPD_SOAK)
+// Boot-time power experiment: one refresh every 15 s, each showing its number, so a
+// PPK2 capture can be lined up with "refresh 1, 2, 3 ...". Patches name a spot in the
+// FLY LUT (offsets differ between the 70- and 100-byte layouts) and are applied on
+// top of the pristine LUT each step.
+enum { P_LUT0, P_LUT3, P_TPA };   // LUT0 B->B, LUT3 W->W, Group0 TP A
+typedef struct { const char *name; u8 mode, diff, n; u8 p[3][2]; } EXP_STEP;
+static const EXP_STEP exp_steps[] = {
+	{"FULL",               UPDATE_FULL, 0, 0, {{0}}},
+	{"FLY",                UPDATE_FLY,  0, 0, {{0}}},
+	{"FLY again",          UPDATE_FLY,  0, 0, {{0}}},
+	{"FAST",               UPDATE_FAST, 0, 0, {{0}}},
+	{"FLY diff",           UPDATE_FLY,  1, 0, {{0}}},
+	{"FLY diff no BB/WW",  UPDATE_FLY,  1, 2, {{P_LUT0,0},{P_LUT3,0}}},
+	{"FLY diff no BB/WW",  UPDATE_FLY,  1, 2, {{P_LUT0,0},{P_LUT3,0}}},
+	{"FLY TPA 8",          UPDATE_FLY,  0, 1, {{P_TPA,0x08}}},
+	{"FLY TPA 5",          UPDATE_FLY,  0, 1, {{P_TPA,0x05}}},
+	{"FLY diff noBBWW TPA 8", UPDATE_FLY, 1, 3, {{P_LUT0,0},{P_LUT3,0},{P_TPA,0x08}}},
+	{"FULL",               UPDATE_FULL, 0, 0, {{0}}},
+};
+#define EXP_N (sizeof(exp_steps)/sizeof(exp_steps[0]))
+static u8 exp_lut_ref[112];
+static int exp_idx;
+// declared array sizes: lut_fly_70[80], lut_fly_100[112]
+static int exp_lut_n(void) { return lut_size==100? 112 : 80; }
+
+static void exp_step(void)
+{
+	const EXP_STEP *s = &exp_steps[exp_idx];
+	char tbuf[8];
+	int xres = layout_xres();
+	int yres = layout_yres();
+	int rl = (lut_size==100)? 10 : 7;	// LUT row length; rows first, then groups
+
+	// Wait if the panel is still busy from the last refresh; try again shortly
+	if(epd_wait_hnd != EASY_TIMER_INVALID_TIMER){
+		app_easy_timer(100, exp_step);
+		return;
+	}
+
+	if(exp_idx >= (int)EXP_N){
+		// Last refresh is done and the panel is asleep: hand over to normal operation
+		exp_running = 0;
+		exp_diff = 0;
+		memcpy(lut_fly, exp_lut_ref, exp_lut_n());
+		user_boot_finish();
+		return;
+	}
+
+	memcpy(lut_fly, exp_lut_ref, exp_lut_n());
+	for(int i=0; i<s->n; i++){
+		int off = (s->p[i][0]==P_LUT0)? 0 : (s->p[i][0]==P_LUT3)? 3*rl : 5*rl;
+		lut_fly[off] = s->p[i][1];
+	}
+	exp_diff = s->diff;
+
+	epd_hw_open();
+	epd_update_mode(s->mode);
+	fb_clear();
+	select_font(0);
+	sprintf(tbuf, "%d", exp_idx+1);
+	draw_text_scaled_centered(xres/2, yres/8, tbuf, 5, BLACK);
+	draw_text_centered(xres/2, yres*3/4, (char*)s->name, BLACK);
+	epd_commit();
+
+	exp_idx++;
+	app_easy_timer(1500, exp_step);
+}
+
+// Called after the GATT database is up, before advertising: first refresh after 15 s
+void exp_start(void)
+{
+	memcpy(exp_lut_ref, lut_fly, exp_lut_n());
+	exp_idx = 0;
+	exp_running = 1;
+	app_easy_timer(1500, exp_step);
+}
+#endif
+
 // Integer sin(deg)*1000 for deg=0..90; other quadrants derived by symmetry in isin()/icos().
 // Avoids pulling in float/libm on a Cortex-M0 target for what is only ever a once-a-minute redraw.
 static const int sin_tab[91] = {
@@ -820,7 +902,7 @@ void clock_draw(int flags)
 	LAYOUT *lt = &layouts[current_layout];
 	int xres, yres;
 
-	if(ota_state){
+	if(ota_state || exp_running){
 		return;
 	}
 
@@ -1042,6 +1124,20 @@ void user_svc1_long_val_wr_ind_handler(ke_msg_id_t const msgid,
 	}else if(param->value[0]==0x98){
 		// Display test screen; the next clock redraw or a mode switch replaces it
 		if(!ota_state) TEST_draw();
+#ifdef EPD_EXPERIMENT
+	}else if(param->value[0]==0x99 && len>=3){
+		// Experiment hook: [0x99, op, a, b]
+		//  op 0: differential (0x26) off/on = a
+		//  op 1: patch lut_fly[a] = b (offset < 112)
+		//  op 2: redraw the clock now with update mode a (0 full, 1 fast, 2 fly)
+		if(param->value[1]==0){
+			exp_diff = param->value[2];
+		}else if(param->value[1]==1 && len>=4 && param->value[2]<112){
+			lut_fly[param->value[2]] = param->value[3];
+		}else if(param->value[1]==2 && !ota_state){
+			clock_draw(param->value[2]);
+		}
+#endif
 	}else if(param->value[0]>=0x93 && param->value[0]<=0x96){
 		// Display mode / image upload
 		image_cmd((const uint8_t*)param->value, len);

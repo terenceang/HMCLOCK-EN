@@ -83,6 +83,12 @@ int  epd_detect(void);
 
 extern u8 lut_p[];
 
+#ifdef EPD_EXPERIMENT
+extern int exp_diff;   // 1: write the previous frame to RAM 0x26 (differential)
+extern int lut_size;
+extern u8 *lut_fly;    // patchable via BLE 0x99
+#endif
+
 
 // epd_gui
 void draw_pixel(int x, int y, int color);
