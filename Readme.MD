@@ -137,6 +137,35 @@ When powered on for the first time, it will show a pairing page. Scan the QR cod
 
 ---
 
+## Power Profile
+
+Measured with a Nordic Power Profiler Kit II in source-meter mode (100 kHz sampling), on the panel-and-board combination used for development. The advertising figures are from test builds using the same advertising settings as the current firmware (0xA50f0035); treat everything here as approximate.
+
+| State | Current / charge | Notes |
+|---|---|---|
+| Sleep, between radio events | **2.8 – 3.4 µA** | needs a scheduled BLE event, see below |
+| Sleep with **no** BLE activity scheduled | **18.3 µA** | why the firmware never stops advertising |
+| Advertising event | about 11 µC, 5 mA peak | one event per interval, on three channels |
+| Advertising every 5.12 s (synced) | **about 5.3 µA** average | 3.2 µA sleep + about 2.1 µA of events |
+| Advertising every 0.69 s (pairing screen) | about 19 µA average | used only until the first sync |
+| Connected, idle | about 95 µA average | before the slower connection parameters apply |
+| Panel fast refresh (every minute) | about 2.0 mC, up to about 40 mA, about 2.5 s | followed by about 47 µA for about 2.5 s (about 0.12 mC) |
+| Power-on, boot and pairing-screen draw | about 11.9 mC over about 5 s | full refresh; brief inrush of over 100 mA |
+
+The BLE stack idles at about 18 µA when nothing is scheduled but only about 3 µA when it has a periodic event to wake for, so the clock advertises for good (0.69 s before the first sync, 5.12 s after) instead of stopping. A 10.24 s interval was too slow for a browser or phone to find the clock, and 2.56 s works but costs more.
+
+**Estimated average, synced and advertising:** 60 refreshes an hour at about 2 mC is about 123 mC, and advertising plus sleep is about 19 mC, so roughly **142 mC/h, or about 40 µA**. The panel refresh is about 85% of that, so refreshing less often saves far more than any radio change.
+
+| Battery (parallel cells) | Usable capacity (assumed) | Estimated life |
+|---|---|---|
+| 1 × CR2032 | about 200 mAh | about 210 days |
+| 2 × CR2032 | about 400 mAh | about 420 days |
+| 2 × CR2450 | about 1000 mAh | about 1050 days |
+
+These are estimates: the refresh charge varied between captures (2.0 to 4.4 mC, depending on the waveform and probably the supply voltage), and coin cells deliver less than their rating at the 2.6 V cut-off and under the panel's current pulses. Compare charges within one capture, and set the PPK supply to the voltage the clock will really see.
+
+---
+
 ## Troubleshooting
 
 * **Wrong or garbled picture, or the panel stays blank:** the panel size can't be read from the panel. Pick the right size in the control panel's **Panel** dropdown and use **Test pattern** to check.
