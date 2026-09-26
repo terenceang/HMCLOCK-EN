@@ -323,7 +323,7 @@
     <footer class="mt-6 text-center text-xs text-gray-600 dark:text-slate-300">
       <p>HM CLOCK Bluetooth Control Tool &copy; <a href="https://github.com/tpunix/HMCLOCK" target="_blank" rel="noopener" class="underline text-primary">tpunix/HMCLOCK</a> &middot; fork by Terence Ang</p>
       <!-- The placeholder below is replaced with the commit + time by .github/workflows/sync-docs.yml when publishing -->
-      <p class="mt-1">Web app build: <span id="web-build">d81b5d7, 2026-09-25 22:49 UTC</span> &middot; Shortcuts: <kbd>C</kbd> connect / disconnect &middot; <kbd>S</kbd> sync time &middot; <kbd>D</kbd> switch clock / image</p>
+      <p class="mt-1">Web app build: <span id="web-build">310aaa6, 2026-09-26 00:10 UTC</span> &middot; Shortcuts: <kbd>C</kbd> connect / disconnect &middot; <kbd>S</kbd> sync time &middot; <kbd>D</kbd> switch clock / image</p>
     </footer>
   </div>
 
@@ -715,7 +715,12 @@
         console.log('Device name:', device.name);
         document.getElementById('device_name').textContent = device.name;
         setValueStyle('device_name', false);
-        device.ongattserverdisconnected = onDisconnect;
+        // Link dropped from the clock's side (out of range, it went to sleep, it
+        // reset): tell the user. connected is already false after a Disconnect click.
+        device.ongattserverdisconnected = () => {
+          if (connected) notify('Bluetooth disconnected from the clock.', 'warning');
+          onDisconnect();
+        };
         lastDevice = device;
         try { localStorage.setItem(LAST_DEVICE_KEY, JSON.stringify({ id: device.id, name: device.name })); } catch (e) { /* not persisted */ }
 
@@ -1119,6 +1124,14 @@
     function onDisconnect() {
       device = null;
       connected = false;
+
+      // A dropped link never went through disconnect(): stop the live clock
+      // readout, otherwise it keeps ticking over the "--:--:--" placeholder
+      if (deviceTimeInterval) {
+        clearInterval(deviceTimeInterval);
+        deviceTimeInterval = null;
+      }
+      deviceTimeBase = null;
 
       document.getElementById('device_name').textContent = "--";
       document.getElementById('current_voltage').textContent = "--.- V";
