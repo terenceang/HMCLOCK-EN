@@ -189,6 +189,7 @@
             <i class="fa fa-wrench"></i> Time Calibration
           </button>
           <label class="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400 cursor-pointer"><input id="opt-autosync" type="checkbox" class="w-4 h-4"> Sync time automatically when connecting</label>
+          <label class="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400 cursor-pointer"><input id="opt-discsync" type="checkbox" class="w-4 h-4"> Disconnect after time sync</label>
         </div>
       </section>
 
@@ -804,11 +805,17 @@
     if (webBuild.textContent.startsWith('__')) webBuild.textContent = 'local copy (not published)';
 
     // Time sync
-    const autoSync = document.getElementById('opt-autosync');
-    try { autoSync.checked = localStorage.getItem('hmclock-autosync') === '1'; } catch (e) { /* not persisted */ }
-    autoSync.addEventListener('change', () => {
-      try { localStorage.setItem('hmclock-autosync', autoSync.checked ? '1' : '0'); } catch (e) { /* not persisted */ }
-    });
+    // A checkbox remembered across visits
+    function persistedCheckbox(id, key) {
+      const el = document.getElementById(id);
+      try { el.checked = localStorage.getItem(key) === '1'; } catch (e) { /* not persisted */ }
+      el.addEventListener('change', () => {
+        try { localStorage.setItem(key, el.checked ? '1' : '0'); } catch (e) { /* not persisted */ }
+      });
+      return el;
+    }
+    const autoSync = persistedCheckbox('opt-autosync', 'hmclock-autosync');
+    const discAfterSync = persistedCheckbox('opt-discsync', 'hmclock-discsync');
 
     async function onSetTime() {
       const setimeButton = document.getElementById('setime-button');
@@ -844,13 +851,14 @@
         updateDeviceTime();
 
         console.log('Time sync succeeded!');
-        toast('Time synced.', 'success');
+        toast(discAfterSync.checked ? 'Time synced. Disconnecting.' : 'Time synced.', 'success');
+        if (discAfterSync.checked) disconnect();
       } catch (error) {
         console.log('Time sync failed:', error);
         toast('Time sync failed: ' + (error.message || error), 'error');
       } finally {
         setimeButton.innerHTML = '<i class="fa fa-clock-o"></i> Sync Time';
-        setimeButton.disabled = false;
+        setimeButton.disabled = !connected;
       }
     }
 
