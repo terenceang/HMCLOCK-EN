@@ -1,5 +1,11 @@
 # Changelog
 
+## 0xA50f0035
+
+* **Always advertising.** The clock now advertises until connected and restarts after every disconnect: every 0.69 s until the first sync, then every 5.12 s. Measured with a power profiler: with no BLE activity scheduled the chip idled at about 18 µA instead of about 3 µA, so a slow keep-alive advertisement cuts the idle draw by about 13 µA (an estimated 20% of average current). A 10.24 s interval was too slow to be found from a browser or phone, 5.12 s connects.
+* **No Bluetooth icon after the first sync**, since the clock is always contactable. The pairing screen keeps its icon (advertising or connected). This replaces the quarter-hour advertising bursts from 0xA50f002f, and the timeout, per-burst redraw and `DRAW_BT` flag are gone.
+* The clock tick restarts advertising if it ever stopped.
+
 ## 0xA50f002f
 
 * **Advertising every 15 minutes** (:00, :15, :30, :45) instead of every 10, and the Bluetooth icon no longer triggers an extra panel refresh when the advertising burst ends (it clears at the next minute redraw). Saves roughly 5 uA of average current.

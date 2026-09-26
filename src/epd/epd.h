@@ -141,7 +141,6 @@ void select_layout(int xres, int yres);
 #define UPDATE_FAST  1
 #define UPDATE_FLY   2
 
-#define DRAW_BT   0x80
 #define DRAW_CLEAN 0x40
 
 extern int scr_w;

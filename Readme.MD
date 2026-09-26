@@ -113,10 +113,10 @@ After the first flash, update over Bluetooth: open the [control panel](https://t
 
 The project's built-in web page provides **Web Bluetooth** functionality for manual time synchronization:
 
-* Once synced, the firmware broadcasts every **15 minutes on the dot** (:00, :15, :30, :45), lasting for **15 seconds**. Until the first sync (after power-up), the clock shows the pairing screen and broadcasts for 30 seconds every minute;
-* The screen shows a **Bluetooth icon** (top-right of the left card, or beside "Bluetooth" on the pairing screen) whenever the clock is broadcasting or connected. After a broadcast ends the icon disappears at the next minute redraw (within a minute);
+* The clock **always advertises**, so it can be connected at any time: every 0.69 s until the first sync (the pairing screen), then every 5.12 s. A BLE stack with nothing scheduled idles at about 18 µA instead of 3 µA, so keeping a slow advertisement running also saves battery. After the first sync the clock can take up to about 10 seconds to appear in the browser's device chooser;
+* The pairing screen shows a **Bluetooth icon** beside "Bluetooth" while the clock is advertising or connected. The synced clock face shows no Bluetooth icon, because the clock is always contactable;
 * Open the web page, click "Connect", select your device, and click "Sync Time" to complete the synchronization. The page reads the clock back after the write and reports an error if the clock rejected the time. If the link drops, the page tells you and stops the live clock readout;
-* Broadcasting stops while a phone is connected and during a firmware update; it resumes after an unexpected disconnect, and at the next quarter-hour after you disconnect from the page. In image mode the icon is not drawn over the picture.
+* Advertising pauses while a phone is connected and resumes as soon as it disconnects, however the link ended.
 
 ## Time Calibration
 
@@ -141,7 +141,7 @@ When powered on for the first time, it will show a pairing page. Scan the QR cod
 
 * **Wrong or garbled picture, or the panel stays blank:** the panel size can't be read from the panel. Pick the right size in the control panel's **Panel** dropdown and use **Test pattern** to check.
 * **Weak contrast:** seen on the 250 x 122 HINK-E0213A22-A0, probably because the board's boost circuit is sized for the A41.
-* **Can't find the clock after syncing:** it is only connectable for 15 seconds at :00, :15, :30 and :45. Wait for the Bluetooth icon to appear, or power-cycle the clock to bring back the pairing screen (broadcasting every minute; you then need to sync the time again).
+* **Slow to appear after syncing:** once synced the clock advertises every 5.12 s, so give the device chooser up to about 10 seconds. A power-cycle brings back the pairing screen and fast advertising (you then need to sync the time again).
 * **Can't pair:** scan the QR code shown on the panel; Web Bluetooth needs Chrome or Edge on a device with a Bluetooth adapter.
 * **Firmware didn't change after an update:** see the OTA limitation in [`Programming.md`](Programming.md#method-2--bluetooth-ota-end-users).
 * **Clock drifts:** run **Time Calibration** twice, 2 to 3 weeks apart.

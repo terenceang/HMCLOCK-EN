@@ -299,15 +299,18 @@ static void app_clock_timer_cb(void)
 		return;
 	}
 
+	// The clock advertises all the time (a stack with nothing scheduled idles at
+	// ~18 uA instead of ~3 uA); this restarts it if it ever stopped. No-op while
+	// advertising or connected.
+	user_app_adv_start();
+
     // Not yet synced -- show the pairing QR code instead of the clock face.
-    // Unlike the synced clock's power-saving 15-minute duty cycle, redraw and
-    // re-advertise every minute here: an unpaired tag needs to stay
-    // discoverable and visibly alive, since battery life doesn't matter yet.
+    // Redraw every minute here: an unpaired tag needs to stay visibly alive,
+    // and the Bluetooth icon on this screen follows the advertising state.
     if(cal_minute<0){
         if(stat>=1){
-            user_app_adv_start();
             // Full refresh on the hour (stat>=3) to clear any ghosting from the
-            // repeated fast BT-icon toggles; fast update otherwise.
+            // repeated fast updates; fast update otherwise.
             if(display_mode!=1)
                 QR_draw(stat>=3 ? UPDATE_FULL : UPDATE_FAST);
         }
@@ -328,7 +331,7 @@ static void app_clock_timer_cb(void)
 	}
 
 	if(stat>=3){
-		flags = DRAW_BT | UPDATE_FULL; // Needs the Bluetooth icon + a full update
+		flags = UPDATE_FULL; // Hourly full update
 		if(stat>=4){
 			// Midnight: nightly ghost scrub. This frame is driven solid black
 			// (clock_draw's DRAW_CLEAN path); queue a forced full redraw of
@@ -341,17 +344,12 @@ static void app_clock_timer_cb(void)
 		scrub_next_full = 0;
 		flags = UPDATE_FULL;
 	}else if(stat>=2){
-		flags = DRAW_BT | UPDATE_FAST; // Needs the Bluetooth icon + a fast update
-	}
-
-	// Start advertising if the Bluetooth icon needs to be shown
-	if(flags&DRAW_BT){
-		user_app_adv_start();
+		flags = UPDATE_FAST; // Quarter-hour fast update
 	}
 
 	// Update the screen based on the state or flags
 	// (image mode leaves the uploaded picture on the panel untouched)
-	if((stat>0 || flags&DRAW_BT) && display_mode!=1){
+	if(stat>0 && display_mode!=1){
 		clock_draw(flags);
 	}
 }
@@ -408,7 +406,6 @@ void user_app_on_db_init_complete( void )
 
 	// Start advertising, then draw the pairing screen (draw after start so it
 	// reflects the just-started advertising/BT state)
-	//clock_draw(DRAW_BT|UPDATE_FULL);
 	user_app_adv_start();
 	// Restore the persisted mode: the uploaded image if one is stored, else the
 	// pairing screen (the clock is not synced after a reset)
@@ -423,34 +420,17 @@ void user_app_on_db_init_complete( void )
 }
 
 
-// SDK advertising-timeout hook: fires when the timeout timer stops advertising, so
-// adv_state is cleared even if the stack's advertising-complete event never reaches
-// user_app_adv_undirect_complete (a stuck adv_state blocks every later restart)
-// Redraw whichever screen applies so the Bluetooth icon matches the current state
-// (image mode keeps its picture; the pairing QR shows until the first sync)
-static void screen_refresh(void)
-{
-	if(display_mode==1){
-	}
-	else if(cal_minute<0){
-		QR_draw(UPDATE_FLY);
-	}
-	else
-		clock_draw(UPDATE_FLY);
-}
-
-static void adv_timeout_cb(void)
-{
-	// No redraw here: the per-minute redraw takes the icon off within 60 s, and
-	// a refresh of its own would cost more than the advertising burst itself
-	adv_state = 0;
-}
+// Advertising interval once the clock has been synced: slow, but it must keep
+// running -- with nothing scheduled the BLE stack idles at ~18 uA instead of ~3 uA
+// (measured), and 10.24 s was too slow to be found by a scanner. Before the first
+// sync the (fast) interval from user_adv_conf is used so pairing is quick.
+#define ADV_SYNCED_INTV MS_TO_BLESLOTS(5120)
 
 /**
  ****************************************************************************************
  * @brief Start application advertising
  *        Builds the advertising data (device name + EPD version) and starts
- *        undirected advertising with a timeout
+ *        undirected advertising that runs until a connection is made
  ****************************************************************************************
  */
 void user_app_adv_start(void)
@@ -480,10 +460,14 @@ void user_app_adv_start(void)
 	vbuf[5] = (EPD_VERSION>>8)&0xff;
 	app_add_ad_struct(cmd, vbuf, vbuf[0]+1, 1);
 
-	// Start undirected advertising with a timeout: a longer window until the clock
-	// has been synced for the first time (cal_minute<0), the normal burst after
-	app_easy_gap_undirected_advertise_with_timeout_start(
-		cal_minute<0 ? MS_TO_TIMERUNITS(30000) : user_default_hnd_conf.advertise_period, adv_timeout_cb);
+	// Slow interval once synced (see ADV_SYNCED_INTV)
+	if(cal_minute>=0){
+		cmd->intv_min = ADV_SYNCED_INTV;
+		cmd->intv_max = ADV_SYNCED_INTV;
+	}
+
+	// Advertise until a connection is made (no timeout)
+	app_easy_gap_undirected_advertise_start();
 	printk("\nuser_app_adv_start! %s\n", adv_name+2);
 }
 
@@ -505,7 +489,7 @@ void user_app_connection(uint8_t connection_idx, struct gapc_connection_req_ind 
     if (app_env[connection_idx].conidx != GAP_INVALID_CONIDX)
     {
         app_connection_idx = connection_idx; // Update the connection index
-        adv_state = 0; // a connection ends advertising; the icon now follows the link
+        adv_state = 0; // a connection ends advertising
 
 		// Print the connection parameters
 		printk("  interval: %d\n", param->con_interval);
@@ -535,8 +519,8 @@ void user_app_connection(uint8_t connection_idx, struct gapc_connection_req_ind 
 /**
  ****************************************************************************************
  * @brief Undirected advertising complete callback
- *        Called when advertising times out or ends abnormally; updates the
- *        advertising state and refreshes the screen
+ *        Called when advertising ends (a connection, or an error); clears the
+ *        advertising state so the next clock tick can restart it
  * @param[in] status advertising end status code
  ****************************************************************************************
  */
@@ -544,14 +528,9 @@ void user_app_adv_undirect_complete(uint8_t status)
 {
 	printk("user_app_adv_undirect_complete: %02x\n", status);
 	// Advertising is over either way, so always clear the state (otherwise a
-	// status-0 stop would block every later user_app_adv_start). Redraw only if
-	// this is news: the timeout hook (adv_timeout_cb) may already have done it,
-	// and a status-0 end is a connection, whose icon is already up.
-	int was_advertising = adv_state;
+	// stop would block every later user_app_adv_start). A failed start is retried
+	// by the minute tick (app_clock_timer_cb).
 	adv_state = 0;
-	if(status!=0 && was_advertising){
-		screen_refresh();
-	}
 }
 
 
@@ -559,8 +538,7 @@ void user_app_adv_undirect_complete(uint8_t status)
  ****************************************************************************************
  * @brief Disconnect callback
  *        Called when the connection is dropped; cleans up timers, updates the
- *        connection state, and decides whether to restart advertising based on
- *        the disconnect reason
+ *        connection state, and restarts advertising
  * @param[in] param disconnect parameters (includes the disconnect reason)
  ****************************************************************************************
  */
@@ -580,13 +558,9 @@ void user_app_disconnect(struct gapc_disconnect_ind const *param)
 	ota_abort();             // drop any half-received firmware update
 	adv_state = 0; // Mark as not advertising
 
-	// Restart advertising unless the remote user initiated the disconnect;
-	// otherwise just refresh the screen
-	if(param->reason!=CO_ERROR_REMOTE_USER_TERM_CON){
-		user_app_adv_start();
-	}else{
-		screen_refresh();
-	}
+	// Always restart advertising, whoever ended the link: the clock stays
+	// contactable (and the BLE stack stays out of its 18 uA idle state)
+	user_app_adv_start();
 }
 
 

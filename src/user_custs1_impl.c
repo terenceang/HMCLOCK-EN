@@ -62,7 +62,8 @@ int adcval;
 
 extern int adv_state;
 extern int app_connection_idx;
-// Bluetooth is "active" while advertising or connected: the icon follows this
+// Bluetooth is "active" while advertising or connected: the icon on the pairing
+// screen follows this. The synced clock face shows no icon: it is always contactable.
 #define BT_ACTIVE() (adv_state || app_connection_idx!=-1)
 /*
  * FUNCTION DEFINITIONS
@@ -812,7 +813,7 @@ static void draw_calendar_card(int x1, int y1, int x2, int y2)
  *
  * @param flags display control flags
  *              bit0-1: update mode (fast/normal)
- *              bit7 (DRAW_BT): whether to show the Bluetooth icon
+ *              bit6 (DRAW_CLEAN): nightly ghost scrub (drive the panel black)
  */
 void clock_draw(int flags)
 {
@@ -842,8 +843,8 @@ void clock_draw(int flags)
 	xres = lt->xres;
 	yres = lt->yres;
 
-	// Left card: analog clock face, with the battery + Bluetooth status icons
-	// tucked into its top-left corner (Bluetooth icon only while advertising)
+	// Left card: analog clock face, with the battery icon tucked into its top-left
+	// corner (no Bluetooth icon: the synced clock is always contactable)
 	// Both cards fill nearly the whole screen, split by a small gap around the midline.
 	{
 		int x1 = xres*2/212,   y1 = yres*2/104;
@@ -854,9 +855,6 @@ void clock_draw(int flags)
 
 		draw_rect(x1, y1, x2, y2, BLACK);
 
-		if(BT_ACTIVE()){
-			draw_bt(x2-11, y1+1); // top-right corner, mirroring the battery at top-left
-		}
 		draw_batt(x1+5, y1+8);
 
 		draw_clock_face(cx, cy, r);
@@ -1025,7 +1023,7 @@ void user_svc1_long_val_wr_ind_handler(ke_msg_id_t const msgid,
 		// Update the display (with Bluetooth icon, fast update mode); image mode
 		// keeps its picture and only takes the new time
 		if(display_mode!=1)
-			clock_draw(DRAW_BT|UPDATE_FAST);
+			clock_draw(UPDATE_FAST);
 		// Print the current time
 		clock_print();
 	}else if(param->value[0]==0x92){
