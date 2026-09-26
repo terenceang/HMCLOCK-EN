@@ -376,20 +376,18 @@ static timer_hnd epd_wait_hnd;
 
 static uint8_t batt_cal(uint16_t adc_sample)
 {
-    uint8_t batt_lvl;
+    // CR2032 discharge curve under load (ADC counts, %): flat ~2.9 V plateau, knee
+    // below 2.7 V, 0% at the 2.6 V low-battery cutoff. Linear between points.
+    static const uint16_t adc[] = {1649, 1592, 1536, BATT_CUTOFF_ADC};
+    static const uint8_t  pct[] = { 100,   70,   30,    0};
 
-    if (adc_sample > 1705)
-        batt_lvl = 100;
-    else if (adc_sample <= 1705 && adc_sample > 1584)
-        batt_lvl = 28 + (uint8_t)(( ( ((adc_sample - 1584) << 16) / (1705 - 1584) ) * 72 ) >> 16) ;
-    else if (adc_sample <= 1584 && adc_sample > 1360)
-        batt_lvl = 4 + (uint8_t)(( ( ((adc_sample - 1360) << 16) / (1584 - 1360) ) * 24 ) >> 16) ;
-    else if (adc_sample <= 1360 && adc_sample > 1136)
-        batt_lvl = (uint8_t)(( ( ((adc_sample - 1136) << 16) / (1360 - 1136) ) * 4 ) >> 16) ;
-    else
-        batt_lvl = 0;
-
-    return batt_lvl;
+    if (adc_sample >= adc[0])
+        return 100;
+    for (int i = 1; i < 4; i++) {
+        if (adc_sample >= adc[i])
+            return pct[i] + (uint32_t)(adc_sample - adc[i]) * (pct[i-1] - pct[i]) / (adc[i-1] - adc[i]);
+    }
+    return 0;
 }
 
 

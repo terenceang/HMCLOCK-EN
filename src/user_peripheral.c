@@ -323,7 +323,7 @@ static void app_clock_timer_cb(void)
 	if(stat>=2){
 		adc1_update();
 		// ADC voltage below 2.6V
-        if(adcval<1360){
+        if(adcval<BATT_CUTOFF_ADC){
 					// Draw the low-battery icon
             LB_draw();
 					// Cancel the timer so it stops waking the device

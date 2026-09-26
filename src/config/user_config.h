@@ -55,7 +55,10 @@
  ****************************************************************************************
  */
 
-#define EPD_VERSION 0xA50f003c
+#define EPD_VERSION 0xA50f003d
+
+// Low-battery cutoff: 2.6 V = 1479 ADC counts (mV = counts*225>>7); 0% on the battery icon
+#define BATT_CUTOFF_ADC 1479
 
 // Power experiments: BLE 0x99 differential/LUT-patch hook (costs ~4.7 KB RAM). Remove when done.
 // #define EPD_EXPERIMENT
