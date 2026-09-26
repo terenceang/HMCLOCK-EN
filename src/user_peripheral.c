@@ -417,6 +417,14 @@ void user_app_on_db_init_complete( void )
 }
 
 
+// SDK advertising-timeout hook: fires when the timeout timer stops advertising, so
+// adv_state is cleared even if the stack's advertising-complete event never reaches
+// user_app_adv_undirect_complete (a stuck adv_state blocks every later restart)
+static void adv_timeout_cb(void)
+{
+	adv_state = 0;
+}
+
 /**
  ****************************************************************************************
  * @brief Start application advertising
@@ -454,7 +462,7 @@ void user_app_adv_start(void)
 	// Start undirected advertising with a timeout: a longer window until the clock
 	// has been synced for the first time (cal_minute<0), the normal burst after
 	app_easy_gap_undirected_advertise_with_timeout_start(
-		cal_minute<0 ? MS_TO_TIMERUNITS(30000) : user_default_hnd_conf.advertise_period, NULL);
+		cal_minute<0 ? MS_TO_TIMERUNITS(30000) : user_default_hnd_conf.advertise_period, adv_timeout_cb);
 	printk("\nuser_app_adv_start! %s\n", adv_name+2);
 }
 
